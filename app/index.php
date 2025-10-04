@@ -348,73 +348,6 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
             color: #0f172a;
         }
 
-        header {
-            position: relative;
-            overflow: hidden;
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(224, 242, 254, 0.9));
-            box-shadow: 0 18px 42px -28px var(--hero-shadow);
-            border-bottom: 1px solid rgba(148, 163, 184, 0.2);
-            color: #0f172a;
-        }
-
-        .hero-surface {
-            border-bottom-left-radius: clamp(1.5rem, 4vw, 3.25rem);
-            border-bottom-right-radius: clamp(1.5rem, 4vw, 3.25rem);
-        }
-
-        header::before,
-        header::after {
-            content: "";
-            position: absolute;
-            width: clamp(220px, 32vw, 360px);
-            height: clamp(220px, 32vw, 360px);
-            border-radius: 999px;
-            background: radial-gradient(circle, rgba(79, 70, 229, 0.16), transparent 65%);
-            z-index: 0;
-        }
-
-        header::before {
-            top: -40%;
-            right: -10%;
-        }
-
-        header::after {
-            bottom: -45%;
-            left: -15%;
-            background: radial-gradient(circle, rgba(14, 165, 233, 0.18), transparent 60%);
-        }
-
-        header .container-xxl {
-            position: relative;
-            z-index: 1;
-        }
-
-        header .btn {
-            border-radius: 999px;
-            padding-inline: 1.25rem;
-            font-weight: 600;
-            backdrop-filter: saturate(160%) blur(6px);
-        }
-
-        .hero-title {
-            font-size: clamp(1.875rem, 1.2rem + 1.5vw, 2.75rem);
-            font-weight: 700;
-            letter-spacing: -0.02em;
-        }
-
-        .hero-subtitle {
-            color: rgba(15, 23, 42, 0.68);
-            max-width: 38rem;
-        }
-
-        .eyebrow-label {
-            font-size: 0.75rem;
-            letter-spacing: 0.28em;
-            text-transform: uppercase;
-            color: rgba(15, 23, 42, 0.55);
-            font-weight: 600;
-        }
-
         .btn-glass {
             background: rgba(79, 70, 229, 0.08);
             color: #1d4ed8;
@@ -569,20 +502,15 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
     </style>
 </head>
 <body>
-<header class="hero-surface">
-    <div class="container-xxl py-3 py-md-4 d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 gap-lg-4">
-        <div class="d-flex flex-column gap-2">
-            <span class="eyebrow-label">Finance cockpit</span>
-            <h1 class="hero-title mb-0">Cashflow Intelligence Hub</h1>
-            <p class="hero-subtitle mb-0">Monitor real-time balances, capture new activity, and visualise payment trends with confidence.</p>
+<div class="container py-4 app-shell">
+    <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
+        <div>
+            <h1 class="h3 mb-1">Cashflow dashboard</h1>
+            <p class="text-muted mb-0 small">Capture income and expenses while tracking cash and click balances.</p>
         </div>
-        <div class="d-flex flex-wrap align-items-center justify-content-lg-end gap-2">
-            <a class="btn btn-glass shadow-sm" href="../index.php"><i class="bi bi-arrow-left-circle me-2"></i>Back to dashboard</a>
-        </div>
+        <a class="btn btn-glass shadow-sm align-self-start" href="../index.php"><i class="bi bi-arrow-left-circle me-2"></i>Back to dashboard</a>
     </div>
-</header>
 
-<div class="container py-5 app-shell">
     <ul class="nav nav-pills flex-column flex-md-row gap-2 justify-content-center" id="cashflowTabs" role="tablist">
         <li class="nav-item flex-fill" role="presentation">
             <button class="nav-link w-100 <?= $activeTab === 'overview' ? 'active' : '' ?>" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab" aria-controls="overview" aria-selected="<?= $activeTab === 'overview' ? 'true' : 'false' ?>">
