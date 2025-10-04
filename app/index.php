@@ -10,6 +10,8 @@ date_default_timezone_set('Asia/Tashkent');
 
 require_once '../db.php';
 
+$dbErrors = [];
+
 // Fetch aggregated totals
 $totalsSql = "SELECT
         COALESCE(SUM(CASE WHEN cash_in = 1 THEN payment END), 0) AS total_income,
@@ -18,12 +20,18 @@ $totalsSql = "SELECT
         COALESCE(SUM(CASE WHEN cash_out = 1 AND date >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN payment END), 0) AS monthly_expense
     FROM transactions";
 $totalsResult = $conn->query($totalsSql);
-$totals = $totalsResult ? $totalsResult->fetch_assoc() : [
-    'total_income' => 0,
-    'total_expense' => 0,
-    'monthly_income' => 0,
-    'monthly_expense' => 0,
-];
+if ($totalsResult instanceof mysqli_result) {
+    $totals = $totalsResult->fetch_assoc();
+    $totalsResult->free();
+} else {
+    $totals = [
+        'total_income' => 0,
+        'total_expense' => 0,
+        'monthly_income' => 0,
+        'monthly_expense' => 0,
+    ];
+    $dbErrors[] = 'Totals could not be loaded. Please check the database connection.';
+}
 
 $balance = $totals['total_income'] - $totals['total_expense'];
 $monthlyBalance = $totals['monthly_income'] - $totals['monthly_expense'];
@@ -43,10 +51,14 @@ $incomeQuery = "SELECT id, date, payment, comment,
     ORDER BY date DESC, id DESC
     LIMIT 10";
 
-if ($incomeResult = $conn->query($incomeQuery)) {
+$incomeResult = $conn->query($incomeQuery);
+if ($incomeResult instanceof mysqli_result) {
     while ($row = $incomeResult->fetch_assoc()) {
         $recentIncome[] = $row;
     }
+    $incomeResult->free();
+} else {
+    $dbErrors[] = 'Income records could not be retrieved.';
 }
 
 $expenseQuery = "SELECT id, date, payment, comment,
@@ -60,10 +72,14 @@ $expenseQuery = "SELECT id, date, payment, comment,
     ORDER BY date DESC, id DESC
     LIMIT 10";
 
-if ($expenseResult = $conn->query($expenseQuery)) {
+$expenseResult = $conn->query($expenseQuery);
+if ($expenseResult instanceof mysqli_result) {
     while ($row = $expenseResult->fetch_assoc()) {
         $recentExpense[] = $row;
     }
+    $expenseResult->free();
+} else {
+    $dbErrors[] = 'Expense records could not be retrieved.';
 }
 
 // Fetch monthly report data for the chart
@@ -80,7 +96,8 @@ $reportIncome = [];
 $reportExpense = [];
 $reportTable = [];
 
-if ($reportResult = $conn->query($reportSql)) {
+$reportResult = $conn->query($reportSql);
+if ($reportResult instanceof mysqli_result) {
     while ($row = $reportResult->fetch_assoc()) {
         $label = $row['period'];
         $reportLabels[] = $label;
@@ -88,9 +105,43 @@ if ($reportResult = $conn->query($reportSql)) {
         $reportExpense[] = (float) $row['expense'];
         $reportTable[] = $row;
     }
+    $reportResult->free();
+} else {
+    $dbErrors[] = 'Report data could not be generated.';
 }
 
 $conn->close();
+
+$allowedTabs = ['overview', 'income', 'expense', 'reports'];
+$sessionActiveTab = $_SESSION['active_tab'] ?? null;
+$queryTab = $_GET['tab'] ?? null;
+$activeTab = in_array($queryTab, $allowedTabs, true)
+    ? $queryTab
+    : (in_array($sessionActiveTab, $allowedTabs, true) ? $sessionActiveTab : 'overview');
+unset($_SESSION['active_tab']);
+
+$preservedForm = $_SESSION['form_values'] ?? null;
+unset($_SESSION['form_values']);
+
+$defaultFormState = [
+    'amount' => '',
+    'date' => date('Y-m-d'),
+    'payment_method' => '',
+    'comment' => '',
+];
+
+$incomeForm = $defaultFormState;
+$expenseForm = $defaultFormState;
+
+if ($preservedForm && ($preservedForm['transaction_type'] ?? '') === 'income') {
+    $incomeForm = array_merge($incomeForm, array_intersect_key($preservedForm, $defaultFormState));
+    $activeTab = 'income';
+}
+
+if ($preservedForm && ($preservedForm['transaction_type'] ?? '') === 'expense') {
+    $expenseForm = array_merge($expenseForm, array_intersect_key($preservedForm, $defaultFormState));
+    $activeTab = 'expense';
+}
 
 $flashMessage = $_SESSION['flash_message'] ?? null;
 $flashType = $_SESSION['flash_type'] ?? 'success';
@@ -135,41 +186,63 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
     </style>
 </head>
 <body>
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="#">Cashflow App</a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav ms-auto">
-                <li class="nav-item">
-                    <a class="nav-link active" data-bs-toggle="tab" href="#overview" role="tab">Overview</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" data-bs-toggle="tab" href="#income" role="tab">Income</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" data-bs-toggle="tab" href="#expense" role="tab">Expense</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" data-bs-toggle="tab" href="#reports" role="tab">Reports</a>
-                </li>
-            </ul>
+<header class="bg-dark text-white">
+    <div class="container py-3 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+        <div>
+            <h1 class="h3 mb-0">Cashflow App</h1>
+            <p class="mb-0 small text-white-50">Track daily income and expenses with ease</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a class="btn btn-outline-light" href="../index.php">Back to Dashboard</a>
         </div>
     </div>
-</nav>
+</header>
 
 <div class="container py-4">
+    <ul class="nav nav-pills flex-column flex-md-row gap-2 justify-content-center" id="cashflowTabs" role="tablist">
+        <li class="nav-item flex-fill" role="presentation">
+            <button class="nav-link w-100 <?= $activeTab === 'overview' ? 'active' : '' ?>" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab" aria-controls="overview" aria-selected="<?= $activeTab === 'overview' ? 'true' : 'false' ?>">
+                Overview
+            </button>
+        </li>
+        <li class="nav-item flex-fill" role="presentation">
+            <button class="nav-link w-100 <?= $activeTab === 'income' ? 'active' : '' ?>" id="income-tab" data-bs-toggle="tab" data-bs-target="#income" type="button" role="tab" aria-controls="income" aria-selected="<?= $activeTab === 'income' ? 'true' : 'false' ?>">
+                Income
+            </button>
+        </li>
+        <li class="nav-item flex-fill" role="presentation">
+            <button class="nav-link w-100 <?= $activeTab === 'expense' ? 'active' : '' ?>" id="expense-tab" data-bs-toggle="tab" data-bs-target="#expense" type="button" role="tab" aria-controls="expense" aria-selected="<?= $activeTab === 'expense' ? 'true' : 'false' ?>">
+                Expense
+            </button>
+        </li>
+        <li class="nav-item flex-fill" role="presentation">
+            <button class="nav-link w-100 <?= $activeTab === 'reports' ? 'active' : '' ?>" id="reports-tab" data-bs-toggle="tab" data-bs-target="#reports" type="button" role="tab" aria-controls="reports" aria-selected="<?= $activeTab === 'reports' ? 'true' : 'false' ?>">
+                Reports
+            </button>
+        </li>
+    </ul>
+
+    <?php if (!empty($dbErrors)): ?>
+        <div class="alert alert-warning alert-dismissible fade show mt-3" role="alert">
+            <h2 class="h6 mb-2">Some data could not be loaded</h2>
+            <ul class="mb-0 ps-3">
+                <?php foreach ($dbErrors as $error): ?>
+                    <li><?= htmlspecialchars($error) ?></li>
+                <?php endforeach; ?>
+            </ul>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    <?php endif; ?>
+
     <?php if ($flashMessage): ?>
-        <div class="alert alert-<?= htmlspecialchars($flashType) ?> alert-dismissible fade show" role="alert">
+        <div class="alert alert-<?= htmlspecialchars($flashType) ?> alert-dismissible fade show mt-3" role="alert">
             <?= htmlspecialchars($flashMessage) ?>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     <?php endif; ?>
 
-    <div class="tab-content">
-        <div class="tab-pane fade show active" id="overview" role="tabpanel">
+    <div class="tab-content mt-4" id="cashflowTabContent">
+        <div class="tab-pane fade <?= $activeTab === 'overview' ? 'show active' : '' ?>" id="overview" role="tabpanel" aria-labelledby="overview-tab">
             <div class="row g-3">
                 <div class="col-md-3 col-sm-6">
                     <div class="card text-bg-success">
@@ -294,7 +367,7 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
             </div>
         </div>
 
-        <div class="tab-pane fade" id="income" role="tabpanel">
+        <div class="tab-pane fade <?= $activeTab === 'income' ? 'show active' : '' ?>" id="income" role="tabpanel" aria-labelledby="income-tab">
             <div class="row g-4">
                 <div class="col-lg-6">
                     <div class="form-section">
@@ -303,26 +376,26 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
                             <input type="hidden" name="transaction_type" value="income">
                             <div class="col-12">
                                 <label for="incomeAmount" class="form-label">Amount</label>
-                                <input type="number" step="0.01" class="form-control" id="incomeAmount" name="amount" required>
+                                <input type="number" step="0.01" class="form-control" id="incomeAmount" name="amount" value="<?= htmlspecialchars($incomeForm['amount']) ?>" required>
                                 <div class="invalid-feedback">Please enter the income amount.</div>
                             </div>
                             <div class="col-12">
                                 <label for="incomeDate" class="form-label">Date</label>
-                                <input type="date" class="form-control" id="incomeDate" name="date" value="<?= date('Y-m-d') ?>" required>
+                                <input type="date" class="form-control" id="incomeDate" name="date" value="<?= htmlspecialchars($incomeForm['date']) ?>" required>
                                 <div class="invalid-feedback">Please select a valid date.</div>
                             </div>
                             <div class="col-12">
                                 <label for="incomeMethod" class="form-label">Payment Method</label>
                                 <select class="form-select" id="incomeMethod" name="payment_method" required>
-                                    <option value="" selected disabled>Choose...</option>
-                                    <option value="cash">Cash</option>
-                                    <option value="click">Click</option>
+                                    <option value="" disabled <?= $incomeForm['payment_method'] === '' ? 'selected' : '' ?>>Choose...</option>
+                                    <option value="cash" <?= $incomeForm['payment_method'] === 'cash' ? 'selected' : '' ?>>Cash</option>
+                                    <option value="click" <?= $incomeForm['payment_method'] === 'click' ? 'selected' : '' ?>>Click</option>
                                 </select>
                                 <div class="invalid-feedback">Select a payment method.</div>
                             </div>
                             <div class="col-12">
                                 <label for="incomeComment" class="form-label">Comment</label>
-                                <textarea class="form-control" id="incomeComment" name="comment" rows="3" placeholder="Optional details"></textarea>
+                                <textarea class="form-control" id="incomeComment" name="comment" rows="3" placeholder="Optional details"><?= htmlspecialchars($incomeForm['comment']) ?></textarea>
                             </div>
                             <div class="col-12">
                                 <button type="submit" class="btn btn-success w-100">Save Income</button>
@@ -358,7 +431,7 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
             </div>
         </div>
 
-        <div class="tab-pane fade" id="expense" role="tabpanel">
+        <div class="tab-pane fade <?= $activeTab === 'expense' ? 'show active' : '' ?>" id="expense" role="tabpanel" aria-labelledby="expense-tab">
             <div class="row g-4">
                 <div class="col-lg-6">
                     <div class="form-section">
@@ -367,26 +440,26 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
                             <input type="hidden" name="transaction_type" value="expense">
                             <div class="col-12">
                                 <label for="expenseAmount" class="form-label">Amount</label>
-                                <input type="number" step="0.01" class="form-control" id="expenseAmount" name="amount" required>
+                                <input type="number" step="0.01" class="form-control" id="expenseAmount" name="amount" value="<?= htmlspecialchars($expenseForm['amount']) ?>" required>
                                 <div class="invalid-feedback">Please enter the expense amount.</div>
                             </div>
                             <div class="col-12">
                                 <label for="expenseDate" class="form-label">Date</label>
-                                <input type="date" class="form-control" id="expenseDate" name="date" value="<?= date('Y-m-d') ?>" required>
+                                <input type="date" class="form-control" id="expenseDate" name="date" value="<?= htmlspecialchars($expenseForm['date']) ?>" required>
                                 <div class="invalid-feedback">Please select a valid date.</div>
                             </div>
                             <div class="col-12">
                                 <label for="expenseMethod" class="form-label">Payment Method</label>
                                 <select class="form-select" id="expenseMethod" name="payment_method" required>
-                                    <option value="" selected disabled>Choose...</option>
-                                    <option value="cash">Cash</option>
-                                    <option value="click">Click</option>
+                                    <option value="" disabled <?= $expenseForm['payment_method'] === '' ? 'selected' : '' ?>>Choose...</option>
+                                    <option value="cash" <?= $expenseForm['payment_method'] === 'cash' ? 'selected' : '' ?>>Cash</option>
+                                    <option value="click" <?= $expenseForm['payment_method'] === 'click' ? 'selected' : '' ?>>Click</option>
                                 </select>
                                 <div class="invalid-feedback">Select a payment method.</div>
                             </div>
                             <div class="col-12">
                                 <label for="expenseComment" class="form-label">Comment</label>
-                                <textarea class="form-control" id="expenseComment" name="comment" rows="3" placeholder="Optional details"></textarea>
+                                <textarea class="form-control" id="expenseComment" name="comment" rows="3" placeholder="Optional details"><?= htmlspecialchars($expenseForm['comment']) ?></textarea>
                             </div>
                             <div class="col-12">
                                 <button type="submit" class="btn btn-danger w-100">Save Expense</button>
@@ -422,7 +495,7 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
             </div>
         </div>
 
-        <div class="tab-pane fade" id="reports" role="tabpanel">
+        <div class="tab-pane fade <?= $activeTab === 'reports' ? 'show active' : '' ?>" id="reports" role="tabpanel" aria-labelledby="reports-tab">
             <div class="card mb-4">
                 <div class="card-header">Income vs Expense (Last 12 Months)</div>
                 <div class="card-body">
@@ -483,6 +556,21 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
                 }
                 form.classList.add('was-validated');
             }, false);
+        });
+
+        const tabs = document.querySelectorAll('#cashflowTabs button[data-bs-toggle="tab"]');
+        tabs.forEach(function (tabButton) {
+            tabButton.addEventListener('shown.bs.tab', function (event) {
+                const targetId = event.target.getAttribute('data-bs-target');
+                if (!targetId) {
+                    return;
+                }
+                const tabName = targetId.replace('#', '');
+                const url = new URL(window.location.href);
+                url.searchParams.set('tab', tabName);
+                const newUrl = url.pathname + url.search + url.hash;
+                history.replaceState(null, '', newUrl);
+            });
         });
 
         const ctx = document.getElementById('incomeExpenseChart');

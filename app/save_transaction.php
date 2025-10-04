@@ -21,6 +21,21 @@ $date = $_POST['date'] ?? date('Y-m-d');
 $paymentMethod = $_POST['payment_method'] ?? '';
 $comment = trim($_POST['comment'] ?? '');
 
+$formValues = [
+    'transaction_type' => $transactionType,
+    'amount' => $_POST['amount'] ?? '',
+    'date' => $_POST['date'] ?? date('Y-m-d'),
+    'payment_method' => $paymentMethod,
+    'comment' => $comment,
+];
+$_SESSION['form_values'] = $formValues;
+
+if (in_array($transactionType, ['income', 'expense'], true)) {
+    $_SESSION['active_tab'] = $transactionType;
+} else {
+    $_SESSION['active_tab'] = 'overview';
+}
+
 $validType = in_array($transactionType, ['income', 'expense'], true);
 $validMethod = in_array($paymentMethod, ['cash', 'click'], true);
 $validDateTime = DateTime::createFromFormat('Y-m-d', $date);
@@ -60,6 +75,7 @@ $stmt->bind_param('diiiiiss', $amount, $cash, $click, $cashIn, $cashOut, $xaraja
 if ($stmt->execute()) {
     $_SESSION['flash_message'] = ucfirst($transactionType) . ' saved successfully!';
     $_SESSION['flash_type'] = 'success';
+    unset($_SESSION['form_values']);
 } else {
     $_SESSION['flash_message'] = 'Failed to save the transaction: ' . $stmt->error;
     $_SESSION['flash_type'] = 'danger';
