@@ -229,7 +229,8 @@ $monthlyStmt = $conn->prepare("SELECT DATE_FORMAT(session_date, '%Y-%m') AS ym, 
 if ($monthlyStmt) {
     $monthlyStmt->bind_param('ss', $monthStart, $monthEnd);
     if ($monthlyStmt->execute()) {
-        while ($row = $monthlyStmt->get_result()->fetch_assoc()) {
+        $monthlyResult = $monthlyStmt->get_result();
+        while ($row = $monthlyResult->fetch_assoc()) {
             $monthlySessions[$row['ym']] = [
                 'amount' => (float) ($row['total_amount'] ?? 0),
                 'share' => (float) ($row['total_share'] ?? 0),
@@ -248,7 +249,8 @@ $monthlyPayoutStmt = $conn->prepare("SELECT DATE_FORMAT(paid_at, '%Y-%m') AS ym,
 if ($monthlyPayoutStmt) {
     $monthlyPayoutStmt->bind_param('ss', $monthStart, $monthEnd);
     if ($monthlyPayoutStmt->execute()) {
-        while ($row = $monthlyPayoutStmt->get_result()->fetch_assoc()) {
+        $payoutResult = $monthlyPayoutStmt->get_result();
+        while ($row = $payoutResult->fetch_assoc()) {
             $monthlyPayouts[$row['ym']] = (float) ($row['total_amount'] ?? 0);
         }
     }
