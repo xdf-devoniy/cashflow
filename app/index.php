@@ -320,762 +320,682 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cashflow Manager</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: {
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                        },
+                        accent: {
+                            400: '#38bdf8',
+                            500: '#0ea5e9',
+                        }
+                    },
+                    boxShadow: {
+                        glow: '0 25px 60px -35px rgba(79, 70, 229, 0.65)',
+                    }
+                }
+            }
+        };
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
     <style>
-        :root {
-            --surface-muted: #f3f6ff;
-            --surface-highlight: #e0f2fe;
-            --surface-bright: #ffffff;
-            --accent: #4f46e5;
-            --accent-contrast: #0ea5e9;
-            --accent-soft: rgba(79, 70, 229, 0.12);
-            --glass-bg: rgba(255, 255, 255, 0.92);
-            --glass-border: rgba(148, 163, 184, 0.25);
-            --text-muted: #64748b;
-            --hero-shadow: rgba(15, 23, 42, 0.15);
-        }
-
         body {
-            min-height: 100vh;
-            margin: 0;
-            background:
-                radial-gradient(circle at 12% 18%, rgba(79, 70, 229, 0.12), transparent 55%),
-                radial-gradient(circle at 85% 12%, rgba(14, 165, 233, 0.14), transparent 50%),
-                linear-gradient(180deg, var(--surface-muted) 0%, var(--surface-bright) 100%);
             font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            color: #0f172a;
-        }
-
-        .btn-glass {
-            background: rgba(79, 70, 229, 0.08);
-            color: #1d4ed8;
-            border: 1px solid rgba(79, 70, 229, 0.18);
-            padding-block: 0.65rem;
-            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-        }
-
-        .btn-glass:hover,
-        .btn-glass:focus {
-            background: rgba(79, 70, 229, 0.12);
-            box-shadow: 0 10px 20px -15px rgba(79, 70, 229, 0.6);
-            transform: translateY(-1px);
-            color: #1d4ed8;
-        }
-
-        .app-shell {
-            margin-top: -2.25rem;
-        }
-
-        .nav-pills .nav-link {
-            border-radius: 999px;
-            font-weight: 600;
-            letter-spacing: 0.03em;
-            color: #1f2937;
-            background-color: rgba(255, 255, 255, 0.85);
-            border: 1px solid rgba(148, 163, 184, 0.25);
-            transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
-        }
-
-        .nav-pills .nav-link:hover {
-            background-color: rgba(255, 255, 255, 0.95);
-            box-shadow: 0 10px 25px -18px rgba(15, 23, 42, 0.35);
-        }
-
-        .nav-pills .nav-link.active {
-            background: linear-gradient(135deg, rgba(79, 70, 229, 0.98), rgba(14, 165, 233, 0.92));
-            color: #fff;
-            box-shadow: 0 14px 28px -18px rgba(79, 70, 229, 0.55);
-            transform: translateY(-2px);
-        }
-
-        .glass-card,
-        .form-section {
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: 1.5rem;
-            box-shadow: 0 25px 45px -30px rgba(15, 23, 42, 0.25);
-            backdrop-filter: saturate(160%) blur(18px);
-        }
-
-        .card {
-            border: none;
-            border-radius: 1.5rem;
-            overflow: hidden;
-        }
-
-        .card h5,
-        .card-header {
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
-
-        .balance-positive {
-            color: #16a34a;
-        }
-
-        .balance-negative {
-            color: #dc2626;
-        }
-
-        .form-section {
-            padding: 2rem;
-        }
-
-        .tab-content {
-            margin-top: 2rem;
-        }
-
-        .chart-container {
-            position: relative;
-            height: 320px;
-        }
-
-        @media (min-width: 992px) {
-            .chart-container--wide {
-                height: 380px;
-            }
-        }
-
-        .text-muted-soft {
-            color: var(--text-muted);
-        }
-
-        .reports-summary .stat-card {
-            border-radius: 1.5rem;
-            border: 1px solid rgba(148, 163, 184, 0.2);
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(248, 250, 252, 0.85));
-            box-shadow: 0 18px 45px -32px rgba(15, 23, 42, 0.7);
-        }
-
-        .reports-summary .icon-badge {
-            width: 3rem;
-            height: 3rem;
-            border-radius: 999px;
-            display: grid;
-            place-items: center;
-            background: var(--accent-soft);
-            color: var(--accent);
-            font-size: 1.25rem;
-        }
-
-        .reports-filter {
-            border-radius: 1.5rem;
-            background: rgba(148, 163, 184, 0.12);
-            border: 1px solid rgba(148, 163, 184, 0.2);
-        }
-
-        .table thead th {
-            font-size: 0.75rem;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-        }
-
-        .table tbody td {
-            vertical-align: middle;
-        }
-
-        .badge-soft {
-            background: rgba(99, 102, 241, 0.12);
-            color: #4338ca;
-            border-radius: 999px;
-            font-weight: 600;
-        }
-
-        .small-caps {
-            font-size: 0.75rem;
-            letter-spacing: 0.22em;
-            text-transform: uppercase;
-            color: var(--text-muted);
-        }
-
-        .quick-range button {
-            border-radius: 999px;
-            font-size: 0.85rem;
-        }
-
-        .glass-card .list-group-item {
-            background-color: transparent;
         }
     </style>
 </head>
-<body>
-<div class="container py-4 app-shell">
-    <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
-        <div>
-            <h1 class="h3 mb-1">Cashflow dashboard</h1>
-            <p class="text-muted mb-0 small">Capture income and expenses while tracking cash and click balances.</p>
-        </div>
-        <a class="btn btn-glass shadow-sm align-self-start" href="../index.php"><i class="bi bi-arrow-left-circle me-2"></i>Back to dashboard</a>
+<body class="min-h-screen text-slate-900 [background:radial-gradient(circle_at_15%_15%,rgba(99,102,241,0.12),transparent_55%),radial-gradient(circle_at_85%_10%,rgba(14,165,233,0.16),transparent_50%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_35%,#fff_100%)]">
+    <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+        <div class="absolute -left-20 top-10 h-64 w-64 rounded-full bg-indigo-300/20 blur-3xl"></div>
+        <div class="absolute -right-16 top-40 h-72 w-72 rounded-full bg-sky-300/20 blur-3xl"></div>
     </div>
-
-    <ul class="nav nav-pills flex-column flex-md-row gap-2 justify-content-center" id="cashflowTabs" role="tablist">
-        <li class="nav-item flex-fill" role="presentation">
-            <button class="nav-link w-100 <?= $activeTab === 'overview' ? 'active' : '' ?>" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab" aria-controls="overview" aria-selected="<?= $activeTab === 'overview' ? 'true' : 'false' ?>">
-                Overview
-            </button>
-        </li>
-        <li class="nav-item flex-fill" role="presentation">
-            <button class="nav-link w-100 <?= $activeTab === 'income' ? 'active' : '' ?>" id="income-tab" data-bs-toggle="tab" data-bs-target="#income" type="button" role="tab" aria-controls="income" aria-selected="<?= $activeTab === 'income' ? 'true' : 'false' ?>">
-                Income
-            </button>
-        </li>
-        <li class="nav-item flex-fill" role="presentation">
-            <button class="nav-link w-100 <?= $activeTab === 'expense' ? 'active' : '' ?>" id="expense-tab" data-bs-toggle="tab" data-bs-target="#expense" type="button" role="tab" aria-controls="expense" aria-selected="<?= $activeTab === 'expense' ? 'true' : 'false' ?>">
-                Expense
-            </button>
-        </li>
-        <li class="nav-item flex-fill" role="presentation">
-            <button class="nav-link w-100 <?= $activeTab === 'reports' ? 'active' : '' ?>" id="reports-tab" data-bs-toggle="tab" data-bs-target="#reports" type="button" role="tab" aria-controls="reports" aria-selected="<?= $activeTab === 'reports' ? 'true' : 'false' ?>">
-                Reports
-            </button>
-        </li>
-    </ul>
-
-    <?php if (!empty($dbErrors)): ?>
-        <div class="alert alert-warning alert-dismissible fade show mt-3" role="alert">
-            <h2 class="h6 mb-2">Some data could not be loaded</h2>
-            <ul class="mb-0 ps-3">
-                <?php foreach ($dbErrors as $error): ?>
-                    <li><?= htmlspecialchars($error) ?></li>
-                <?php endforeach; ?>
-            </ul>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    <div class="relative z-10 mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8 lg:py-12 space-y-8">
+        <div class="flex flex-col gap-4 border border-white/60 bg-white/80 p-6 shadow-lg shadow-slate-200/80 backdrop-blur md:flex-row md:items-end md:justify-between md:rounded-3xl">
+            <div class="space-y-2">
+                <span class="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">Financial hub</span>
+                <h1 class="text-3xl font-semibold text-slate-900 md:text-4xl">Cashflow dashboard</h1>
+                <p class="max-w-xl text-sm text-slate-500 md:text-base">Capture income and expenses, compare cash versus click flows, and explore interactive analytics for any period.</p>
+            </div>
+            <a class="inline-flex items-center justify-center gap-2 self-start rounded-full bg-white/70 px-5 py-3 text-sm font-semibold text-slate-600 shadow-md shadow-slate-200/70 ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:bg-white hover:text-slate-900 hover:shadow-lg hover:shadow-slate-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500" href="../index.php">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="h-5 w-5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+                </svg>
+                Back to dashboard
+            </a>
         </div>
-    <?php endif; ?>
 
-    <?php if ($flashMessage): ?>
-        <div class="alert alert-<?= htmlspecialchars($flashType) ?> alert-dismissible fade show mt-3" role="alert">
-            <?= htmlspecialchars($flashMessage) ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    <?php endif; ?>
-
-    <div class="tab-content mt-4" id="cashflowTabContent">
-        <div class="tab-pane fade <?= $activeTab === 'overview' ? 'show active' : '' ?>" id="overview" role="tabpanel" aria-labelledby="overview-tab">
-            <div class="row g-3">
-                <div class="col-md-3 col-sm-6">
-                    <div class="card text-bg-success">
-                        <div class="card-body">
-                            <h5>Total Income</h5>
-                            <p class="display-6 mb-0">
-                                <?= number_format((float) $totals['total_income'], 2) ?>
-                            </p>
-                        </div>
-                    </div>
+        <?php if ($flashMessage): ?>
+            <?php
+            $flashStyles = [
+                'success' => [
+                    'container' => 'rounded-3xl border border-emerald-200/80 bg-emerald-50/90 px-5 py-4 text-emerald-900 shadow-sm shadow-emerald-100/60 backdrop-blur',
+                    'icon' => 'text-emerald-500',
+                    'icon_wrapper' => 'shadow-emerald-100/80',
+                    'title' => 'Success',
+                ],
+                'danger' => [
+                    'container' => 'rounded-3xl border border-rose-200/80 bg-rose-50/90 px-5 py-4 text-rose-900 shadow-sm shadow-rose-100/60 backdrop-blur',
+                    'icon' => 'text-rose-500',
+                    'icon_wrapper' => 'shadow-rose-100/80',
+                    'title' => 'Please review',
+                ],
+            ];
+            $flashTheme = $flashStyles[$flashType] ?? $flashStyles['success'];
+            ?>
+            <div class="<?= htmlspecialchars($flashTheme['container'], ENT_QUOTES) ?> flex items-start gap-3">
+                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/80 shadow-inner <?= htmlspecialchars($flashTheme['icon_wrapper'] ?? '', ENT_QUOTES) ?> <?= htmlspecialchars($flashTheme['icon'], ENT_QUOTES) ?>">
+                    <?php if ($flashType === 'danger'): ?>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="h-5 w-5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                        </svg>
+                    <?php else: ?>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="h-5 w-5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                        </svg>
+                    <?php endif; ?>
                 </div>
-                <div class="col-md-3 col-sm-6">
-                    <div class="card text-bg-danger">
-                        <div class="card-body">
-                            <h5>Total Expense</h5>
-                            <p class="display-6 mb-0">
-                                <?= number_format((float) $totals['total_expense'], 2) ?>
-                            </p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3 col-sm-6">
-                    <div class="card text-bg-primary">
-                        <div class="card-body">
-                            <h5>Balance</h5>
-                            <p class="display-6 mb-0 <?= $balance >= 0 ? 'balance-positive' : 'balance-negative' ?>">
-                                <?= number_format((float) $balance, 2) ?>
-                            </p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3 col-sm-6">
-                    <div class="card text-bg-secondary">
-                        <div class="card-body">
-                            <h5>This Month</h5>
-                            <p class="mb-1">Income: <?= number_format((float) $totals['monthly_income'], 2) ?></p>
-                            <p class="mb-0">Expense: <?= number_format((float) $totals['monthly_expense'], 2) ?>
-                                <br><small class="<?= $monthlyBalance >= 0 ? 'balance-positive' : 'balance-negative' ?>">Balance: <?= number_format((float) $monthlyBalance, 2) ?></small>
-                            </p>
-                        </div>
-                    </div>
+                <div class="space-y-1 text-sm">
+                    <p class="text-base font-semibold leading-snug"><?= htmlspecialchars($flashTheme['title']) ?></p>
+                    <p><?= htmlspecialchars($flashMessage) ?></p>
                 </div>
             </div>
+        <?php endif; ?>
 
-            <div class="row g-3 mt-2">
-                <div class="col-lg-6">
-                    <div class="card border-success h-100">
-                        <div class="card-header text-bg-success bg-opacity-75">Income by Method</div>
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <span>Cash</span>
-                                <span class="fw-semibold"><?= number_format((float) $totals['total_income_cash'], 2) ?></span>
-                            </div>
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <span>Click</span>
-                                <span class="fw-semibold"><?= number_format((float) $totals['total_income_click'], 2) ?></span>
-                            </div>
-                            <p class="mb-0 small text-muted">This month — Cash: <?= number_format((float) $totals['monthly_income_cash'], 2) ?> · Click: <?= number_format((float) $totals['monthly_income_click'], 2) ?></p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-lg-6">
-                    <div class="card border-danger h-100">
-                        <div class="card-header text-bg-danger bg-opacity-75">Expense by Method</div>
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <span>Cash</span>
-                                <span class="fw-semibold"><?= number_format((float) $totals['total_expense_cash'], 2) ?></span>
-                            </div>
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <span>Click</span>
-                                <span class="fw-semibold"><?= number_format((float) $totals['total_expense_click'], 2) ?></span>
-                            </div>
-                            <p class="mb-0 small text-muted">This month — Cash: <?= number_format((float) $totals['monthly_expense_cash'], 2) ?> · Click: <?= number_format((float) $totals['monthly_expense_click'], 2) ?></p>
-                        </div>
-                    </div>
-                </div>
+        <?php if ($dbErrors): ?>
+            <div class="rounded-3xl border border-rose-200/70 bg-rose-50/90 px-5 py-4 text-sm text-rose-900 shadow-sm shadow-rose-100/60 backdrop-blur">
+                <p class="font-semibold">We hit a snag while loading data.</p>
+                <ul class="mt-2 list-disc space-y-1 pl-5">
+                    <?php foreach ($dbErrors as $error): ?>
+                        <li><?= htmlspecialchars($error) ?></li>
+                    <?php endforeach; ?>
+                </ul>
             </div>
+        <?php endif; ?>
 
-            <div class="row g-3 mt-2">
-                <div class="col-lg-6">
-                    <div class="card glass-card h-100 border-0">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <span>Recent Income</span>
-                            <span class="badge text-bg-success">Last 10</span>
-                        </div>
-                        <div class="card-body p-0">
-                            <div class="table-responsive">
-                                <table class="table mb-0">
-                                    <thead>
-                                    <tr>
-                                        <th>Date</th>
-                                        <th>Amount</th>
-                                        <th>Method</th>
-                                        <th>Comment</th>
-                                    </tr>
-                                    </thead>
-                                    <tbody>
-                                    <?php if ($recentIncome): ?>
-                                        <?php foreach ($recentIncome as $income): ?>
-                                            <tr>
-                                                <td><?= htmlspecialchars($income['date']) ?></td>
-                                                <td><?= number_format((float) $income['payment'], 2) ?></td>
-                                                <td><?= htmlspecialchars($income['method']) ?></td>
-                                                <td><?= htmlspecialchars($income['comment'] ?? '') ?></td>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                    <?php else: ?>
-                                        <tr>
-                                            <td colspan="4" class="text-center py-3">No income records yet.</td>
-                                        </tr>
-                                    <?php endif; ?>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-lg-6">
-                    <div class="card glass-card h-100 border-0">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <span>Recent Expenses</span>
-                            <span class="badge text-bg-danger">Last 10</span>
-                        </div>
-                        <div class="card-body p-0">
-                            <div class="table-responsive">
-                                <table class="table mb-0">
-                                    <thead>
-                                    <tr>
-                                        <th>Date</th>
-                                        <th>Amount</th>
-                                        <th>Method</th>
-                                        <th>Comment</th>
-                                    </tr>
-                                    </thead>
-                                    <tbody>
-                                    <?php if ($recentExpense): ?>
-                                        <?php foreach ($recentExpense as $expense): ?>
-                                            <tr>
-                                                <td><?= htmlspecialchars($expense['date']) ?></td>
-                                                <td><?= number_format((float) $expense['payment'], 2) ?></td>
-                                                <td><?= htmlspecialchars($expense['method']) ?></td>
-                                                <td><?= htmlspecialchars($expense['comment'] ?? '') ?></td>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                    <?php else: ?>
-                                        <tr>
-                                            <td colspan="4" class="text-center py-3">No expense records yet.</td>
-                                        </tr>
-                                    <?php endif; ?>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+        <?php
+        $tabBaseClass = 'group flex-1 min-w-[8rem] select-none items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 sm:text-base';
+        $tabActiveClass = 'bg-gradient-to-r from-indigo-500 via-sky-500 to-cyan-400 text-white shadow-xl shadow-sky-200/70';
+        $tabInactiveClass = 'bg-white/70 text-slate-500 ring-1 ring-slate-200/70 hover:bg-white hover:text-slate-900 hover:shadow-lg hover:shadow-slate-200/80';
+        $panelBaseClass = 'space-y-8';
+        ?>
+
+        <div class="rounded-3xl bg-white/70 p-3 shadow-lg shadow-slate-200/70 ring-1 ring-slate-100/80 backdrop-blur">
+            <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4" role="tablist" aria-label="Cashflow sections">
+                <button type="button"
+                        role="tab"
+                        aria-selected="<?= $activeTab === 'overview' ? 'true' : 'false' ?>"
+                        data-tab-target="overview"
+                        data-active-class="<?= htmlspecialchars($tabActiveClass, ENT_QUOTES) ?>"
+                        data-inactive-class="<?= htmlspecialchars($tabInactiveClass, ENT_QUOTES) ?>"
+                        class="<?= htmlspecialchars($tabBaseClass . ' ' . ($activeTab === 'overview' ? $tabActiveClass : $tabInactiveClass), ENT_QUOTES) ?>">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="h-5 w-5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 3v18h18M7.5 15l4.5-6 3 4.5L21 6" />
+                    </svg>
+                    Overview
+                </button>
+                <button type="button"
+                        role="tab"
+                        aria-selected="<?= $activeTab === 'income' ? 'true' : 'false' ?>"
+                        data-tab-target="income"
+                        data-active-class="<?= htmlspecialchars($tabActiveClass, ENT_QUOTES) ?>"
+                        data-inactive-class="<?= htmlspecialchars($tabInactiveClass, ENT_QUOTES) ?>"
+                        class="<?= htmlspecialchars($tabBaseClass . ' ' . ($activeTab === 'income' ? $tabActiveClass : $tabInactiveClass), ENT_QUOTES) ?>">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="h-5 w-5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v18m6-12H6" />
+                    </svg>
+                    Income
+                </button>
+                <button type="button"
+                        role="tab"
+                        aria-selected="<?= $activeTab === 'expense' ? 'true' : 'false' ?>"
+                        data-tab-target="expense"
+                        data-active-class="<?= htmlspecialchars($tabActiveClass, ENT_QUOTES) ?>"
+                        data-inactive-class="<?= htmlspecialchars($tabInactiveClass, ENT_QUOTES) ?>"
+                        class="<?= htmlspecialchars($tabBaseClass . ' ' . ($activeTab === 'expense' ? $tabActiveClass : $tabInactiveClass), ENT_QUOTES) ?>">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="h-5 w-5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 21V3m6 12H6" />
+                    </svg>
+                    Expense
+                </button>
+                <button type="button"
+                        role="tab"
+                        aria-selected="<?= $activeTab === 'reports' ? 'true' : 'false' ?>"
+                        data-tab-target="reports"
+                        data-active-class="<?= htmlspecialchars($tabActiveClass, ENT_QUOTES) ?>"
+                        data-inactive-class="<?= htmlspecialchars($tabInactiveClass, ENT_QUOTES) ?>"
+                        class="<?= htmlspecialchars($tabBaseClass . ' ' . ($activeTab === 'reports' ? $tabActiveClass : $tabInactiveClass), ENT_QUOTES) ?>">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="h-5 w-5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 3v18M9 8.25l2.25-2.25L13.5 9l4.5-4.5" />
+                    </svg>
+                    Reports
+                </button>
             </div>
         </div>
 
-        <div class="tab-pane fade <?= $activeTab === 'income' ? 'show active' : '' ?>" id="income" role="tabpanel" aria-labelledby="income-tab">
-            <div class="row g-4">
-                <div class="col-lg-6">
-                    <div class="form-section">
-                        <h4 class="mb-3">Add Income</h4>
-                        <form action="save_transaction.php" method="post" class="row g-3 needs-validation" novalidate>
+        <div class="space-y-12">
+            <section data-tab-panel="overview" class="<?= htmlspecialchars($panelBaseClass, ENT_QUOTES) ?> <?= $activeTab === 'overview' ? '' : 'hidden' ?>">
+                <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <article class="rounded-3xl bg-white/80 p-6 shadow-lg shadow-slate-200/80 ring-1 ring-slate-100/70 backdrop-blur">
+                        <p class="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">Net balance</p>
+                        <div class="mt-3 flex items-end justify-between">
+                            <p class="text-3xl font-semibold <?= $balance >= 0 ? 'text-emerald-600' : 'text-rose-600' ?>"><?= number_format((float) $balance, 2) ?></p>
+                            <?php
+                            $monthlyChipClasses = $monthlyBalance >= 0
+                                ? 'bg-emerald-100 text-emerald-600'
+                                : 'bg-rose-100 text-rose-600';
+                            $monthlyChipPrefix = $monthlyBalance >= 0 ? '+' : '';
+                            ?>
+                            <span class="rounded-full px-3 py-1 text-xs font-semibold <?= htmlspecialchars($monthlyChipClasses, ENT_QUOTES) ?>">Monthly <?= $monthlyChipPrefix ?><?= number_format((float) $monthlyBalance, 2) ?></span>
+                        </div>
+                        <p class="mt-4 text-sm text-slate-500">Total income minus expense across all time. The chip highlights this month’s net change.</p>
+                    </article>
+                    <article class="rounded-3xl bg-white/80 p-6 shadow-lg shadow-slate-200/80 ring-1 ring-slate-100/70 backdrop-blur">
+                        <p class="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">Income</p>
+                        <div class="mt-3 space-y-3">
+                            <p class="text-3xl font-semibold text-slate-900"><?= number_format((float) $totals['total_income'], 2) ?></p>
+                            <div class="grid gap-2 text-sm text-slate-500">
+                                <div class="flex items-center justify-between rounded-2xl bg-emerald-50/70 px-3 py-2 text-emerald-600">
+                                    <span>Cash</span>
+                                    <strong><?= number_format((float) $totals['total_income_cash'], 2) ?></strong>
+                                </div>
+                                <div class="flex items-center justify-between rounded-2xl bg-sky-50/70 px-3 py-2 text-sky-600">
+                                    <span>Click</span>
+                                    <strong><?= number_format((float) $totals['total_income_click'], 2) ?></strong>
+                                </div>
+                            </div>
+                            <p class="text-xs font-medium uppercase tracking-[0.2em] text-slate-400">This month <?= number_format((float) $totals['monthly_income'], 2) ?></p>
+                        </div>
+                    </article>
+                    <article class="rounded-3xl bg-white/80 p-6 shadow-lg shadow-slate-200/80 ring-1 ring-slate-100/70 backdrop-blur">
+                        <p class="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">Expense</p>
+                        <div class="mt-3 space-y-3">
+                            <p class="text-3xl font-semibold text-slate-900"><?= number_format((float) $totals['total_expense'], 2) ?></p>
+                            <div class="grid gap-2 text-sm text-slate-500">
+                                <div class="flex items-center justify-between rounded-2xl bg-amber-50/80 px-3 py-2 text-amber-600">
+                                    <span>Cash</span>
+                                    <strong><?= number_format((float) $totals['total_expense_cash'], 2) ?></strong>
+                                </div>
+                                <div class="flex items-center justify-between rounded-2xl bg-indigo-50/80 px-3 py-2 text-indigo-600">
+                                    <span>Click</span>
+                                    <strong><?= number_format((float) $totals['total_expense_click'], 2) ?></strong>
+                                </div>
+                            </div>
+                            <p class="text-xs font-medium uppercase tracking-[0.2em] text-slate-400">This month <?= number_format((float) $totals['monthly_expense'], 2) ?></p>
+                        </div>
+                    </article>
+                    <article class="rounded-3xl bg-gradient-to-br from-indigo-500/90 via-sky-500/90 to-cyan-400/90 p-6 text-white shadow-xl shadow-sky-400/40">
+                        <p class="text-xs font-semibold uppercase tracking-[0.28em] text-white/70">Payment mix</p>
+                        <div class="mt-3 space-y-3">
+                            <div class="flex items-center justify-between text-sm uppercase tracking-[0.2em] text-white/80">
+                                <span>Income</span>
+                                <span>Expense</span>
+                            </div>
+                            <div class="space-y-2 text-sm">
+                                <div class="flex items-center justify-between">
+                                    <span class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-emerald-300"></span>Cash</span>
+                                    <span><?= number_format((float) $totals['total_income_cash'], 2) ?></span>
+                                </div>
+                                <div class="flex items-center justify-between text-white/90">
+                                    <span class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-sky-200"></span>Click</span>
+                                    <span><?= number_format((float) $totals['total_income_click'], 2) ?></span>
+                                </div>
+                                <div class="mt-4 h-px w-full bg-white/30"></div>
+                                <div class="flex items-center justify-between text-white/90">
+                                    <span class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-amber-200"></span>Cash</span>
+                                    <span><?= number_format((float) $totals['total_expense_cash'], 2) ?></span>
+                                </div>
+                                <div class="flex items-center justify-between text-white/90">
+                                    <span class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-indigo-200"></span>Click</span>
+                                    <span><?= number_format((float) $totals['total_expense_click'], 2) ?></span>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="mt-6 text-xs text-white/80">Monitor how cash and click payments distribute across your totals.</p>
+                    </article>
+                </div>
+
+                <div class="grid gap-6 lg:grid-cols-2">
+                    <div class="rounded-3xl bg-white/80 p-6 shadow-lg shadow-slate-200/80 ring-1 ring-slate-100/70 backdrop-blur">
+                        <div class="flex items-center justify-between">
+                            <h2 class="text-lg font-semibold text-slate-900">Recent income</h2>
+                            <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-600">Last 10</span>
+                        </div>
+                        <div class="mt-5 divide-y divide-slate-100/80">
+                            <?php if ($recentIncome): ?>
+                                <?php foreach ($recentIncome as $income): ?>
+                                    <article class="py-3">
+                                        <div class="flex flex-wrap items-center justify-between gap-3">
+                                            <div>
+                                                <p class="text-sm font-semibold text-slate-800"><?= htmlspecialchars($income['date']) ?></p>
+                                                <?php if (!empty($income['comment'])): ?>
+                                                    <p class="text-sm text-slate-500"><?= htmlspecialchars($income['comment']) ?></p>
+                                                <?php endif; ?>
+                                            </div>
+                                            <div class="text-right">
+                                                <p class="text-base font-semibold text-emerald-600">+<?= number_format((float) $income['payment'], 2) ?></p>
+                                                <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600"><?= htmlspecialchars($income['method']) ?></span>
+                                            </div>
+                                        </div>
+                                    </article>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <p class="py-3 text-sm text-slate-500">No income records yet.</p>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <div class="rounded-3xl bg-white/80 p-6 shadow-lg shadow-slate-200/80 ring-1 ring-slate-100/70 backdrop-blur">
+                        <div class="flex items-center justify-between">
+                            <h2 class="text-lg font-semibold text-slate-900">Recent expenses</h2>
+                            <span class="rounded-full bg-rose-50 px-3 py-1 text-xs font-medium text-rose-600">Last 10</span>
+                        </div>
+                        <div class="mt-5 divide-y divide-slate-100/80">
+                            <?php if ($recentExpense): ?>
+                                <?php foreach ($recentExpense as $expense): ?>
+                                    <article class="py-3">
+                                        <div class="flex flex-wrap items-center justify-between gap-3">
+                                            <div>
+                                                <p class="text-sm font-semibold text-slate-800"><?= htmlspecialchars($expense['date']) ?></p>
+                                                <?php if (!empty($expense['comment'])): ?>
+                                                    <p class="text-sm text-slate-500"><?= htmlspecialchars($expense['comment']) ?></p>
+                                                <?php endif; ?>
+                                            </div>
+                                            <div class="text-right">
+                                                <p class="text-base font-semibold text-rose-600">-<?= number_format((float) $expense['payment'], 2) ?></p>
+                                                <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600"><?= htmlspecialchars($expense['method']) ?></span>
+                                            </div>
+                                        </div>
+                                    </article>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <p class="py-3 text-sm text-slate-500">No expense records yet.</p>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section data-tab-panel="income" class="<?= htmlspecialchars($panelBaseClass, ENT_QUOTES) ?> <?= $activeTab === 'income' ? '' : 'hidden' ?>">
+                <div class="grid gap-6 lg:grid-cols-2">
+                    <div class="rounded-3xl bg-white/80 p-6 shadow-lg shadow-slate-200/80 ring-1 ring-slate-100/80 backdrop-blur">
+                        <h2 class="text-xl font-semibold text-slate-900">Add income</h2>
+                        <p class="mt-1 text-sm text-slate-500">Log new earnings and choose whether they were received in cash or via click.</p>
+                        <form action="save_transaction.php" method="post" class="mt-6 space-y-5">
                             <input type="hidden" name="transaction_type" value="income">
-                            <div class="col-12">
-                                <label for="incomeAmount" class="form-label">Amount</label>
-                                <input type="number" step="0.01" class="form-control" id="incomeAmount" name="amount" value="<?= htmlspecialchars($incomeForm['amount']) ?>" required>
-                                <div class="invalid-feedback">Please enter the income amount.</div>
+                            <div>
+                                <label for="incomeAmount" class="text-sm font-medium text-slate-600">Amount</label>
+                                <input type="number" step="0.01" class="mt-2 block w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-900 shadow-inner shadow-slate-100/60 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200" id="incomeAmount" name="amount" value="<?= htmlspecialchars($incomeForm['amount']) ?>" required>
                             </div>
-                            <div class="col-12">
-                                <label for="incomeDate" class="form-label">Date</label>
-                                <input type="date" class="form-control" id="incomeDate" name="date" value="<?= htmlspecialchars($incomeForm['date']) ?>" required>
-                                <div class="invalid-feedback">Please select a valid date.</div>
+                            <div>
+                                <label for="incomeDate" class="text-sm font-medium text-slate-600">Date</label>
+                                <input type="date" class="mt-2 block w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-900 shadow-inner shadow-slate-100/60 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200" id="incomeDate" name="date" value="<?= htmlspecialchars($incomeForm['date']) ?>" required>
                             </div>
-                            <div class="col-12">
-                                <label for="incomeMethod" class="form-label">Payment Method</label>
-                                <select class="form-select" id="incomeMethod" name="payment_method" required>
-                                    <option value="" disabled <?= $incomeForm['payment_method'] === '' ? 'selected' : '' ?>>Choose...</option>
+                            <div>
+                                <label for="incomeMethod" class="text-sm font-medium text-slate-600">Payment method</label>
+                                <select class="mt-2 block w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-900 shadow-inner shadow-slate-100/60 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200" id="incomeMethod" name="payment_method" required>
+                                    <option value="" disabled <?= $incomeForm['payment_method'] === '' ? 'selected' : '' ?>>Choose…</option>
                                     <option value="cash" <?= $incomeForm['payment_method'] === 'cash' ? 'selected' : '' ?>>Cash</option>
                                     <option value="click" <?= $incomeForm['payment_method'] === 'click' ? 'selected' : '' ?>>Click</option>
                                 </select>
-                                <div class="invalid-feedback">Select a payment method.</div>
                             </div>
-                            <div class="col-12">
-                                <label for="incomeComment" class="form-label">Comment</label>
-                                <textarea class="form-control" id="incomeComment" name="comment" rows="3" placeholder="Optional details"><?= htmlspecialchars($incomeForm['comment']) ?></textarea>
+                            <div>
+                                <label for="incomeComment" class="text-sm font-medium text-slate-600">Comment</label>
+                                <textarea class="mt-2 block w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-900 shadow-inner shadow-slate-100/60 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200" id="incomeComment" name="comment" rows="3" placeholder="Optional details"><?= htmlspecialchars($incomeForm['comment']) ?></textarea>
                             </div>
-                            <div class="col-12">
-                                <button type="submit" class="btn btn-success w-100">Save Income</button>
-                            </div>
+                            <button type="submit" class="w-full rounded-full bg-emerald-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-300/50 transition hover:-translate-y-0.5 hover:bg-emerald-600">Save income</button>
                         </form>
                     </div>
-                </div>
-                <div class="col-lg-6">
-                    <div class="card glass-card border-0">
-                        <div class="card-header">Income Overview</div>
-                        <div class="card-body">
-                            <p class="mb-2">Total Income: <strong><?= number_format((float) $totals['total_income'], 2) ?></strong></p>
-                            <p class="mb-2">Monthly Income: <strong><?= number_format((float) $totals['monthly_income'], 2) ?></strong></p>
-                            <p class="mb-2">Cash Income: <strong><?= number_format((float) $totals['total_income_cash'], 2) ?></strong></p>
-                            <p class="mb-2">Click Income: <strong><?= number_format((float) $totals['total_income_click'], 2) ?></strong></p>
-                            <p class="mb-3 small text-muted">This month — Cash: <?= number_format((float) $totals['monthly_income_cash'], 2) ?> · Click: <?= number_format((float) $totals['monthly_income_click'], 2) ?></p>
-                            <p class="mb-0">Recent Notes:</p>
-                            <ul class="list-group list-group-flush">
-                                <?php if ($recentIncome): ?>
-                                    <?php foreach (array_slice($recentIncome, 0, 5) as $income): ?>
-                                        <li class="list-group-item">
-                                            <div class="d-flex justify-content-between">
-                                                <span><?= htmlspecialchars($income['date']) ?></span>
-                                                <span><?= number_format((float) $income['payment'], 2) ?></span>
-                                            </div>
-                                            <small class="text-muted">Method: <?= htmlspecialchars($income['method']) ?><?php if (!empty($income['comment'])): ?> · <?= htmlspecialchars($income['comment']) ?><?php endif; ?></small>
-                                        </li>
-                                    <?php endforeach; ?>
-                                <?php else: ?>
-                                    <li class="list-group-item">No income entries yet.</li>
-                                <?php endif; ?>
-                            </ul>
-                        </div>
+                    <div class="rounded-3xl bg-white/80 p-6 shadow-lg shadow-slate-200/80 ring-1 ring-slate-100/80 backdrop-blur">
+                        <h2 class="text-xl font-semibold text-slate-900">Income snapshot</h2>
+                        <p class="mt-1 text-sm text-slate-500">Totals update instantly so you always know where your inflows stand.</p>
+                        <dl class="mt-6 space-y-4 text-sm text-slate-600">
+                            <div class="flex items-center justify-between">
+                                <dt>Total income</dt>
+                                <dd class="text-base font-semibold text-slate-900"><?= number_format((float) $totals['total_income'], 2) ?></dd>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <dt>Monthly income</dt>
+                                <dd class="text-base font-semibold text-slate-900"><?= number_format((float) $totals['monthly_income'], 2) ?></dd>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <dt>Cash income</dt>
+                                <dd class="text-base font-semibold text-emerald-600"><?= number_format((float) $totals['total_income_cash'], 2) ?></dd>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <dt>Click income</dt>
+                                <dd class="text-base font-semibold text-sky-600"><?= number_format((float) $totals['total_income_click'], 2) ?></dd>
+                            </div>
+                        </dl>
+                        <h3 class="mt-6 text-sm font-semibold uppercase tracking-[0.22em] text-slate-400">Recent notes</h3>
+                        <ul class="mt-3 space-y-3">
+                            <?php if ($recentIncome): ?>
+                                <?php foreach (array_slice($recentIncome, 0, 5) as $income): ?>
+                                    <li class="rounded-2xl border border-slate-100/70 bg-white/80 px-4 py-3 text-sm shadow-sm">
+                                <div class="flex items-center justify-between">
+                                            <span class="font-medium text-slate-800"><?= htmlspecialchars($income['date']) ?></span>
+                                            <span class="font-semibold text-emerald-600">+<?= number_format((float) $income['payment'], 2) ?></span>
+                                        </div>
+                                        <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                                            <span class="rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-600"><?= htmlspecialchars($income['method']) ?></span>
+                                            <?php if (!empty($income['comment'])): ?>
+                                                <span><?= htmlspecialchars($income['comment']) ?></span>
+                                            <?php endif; ?>
+                                        </div>
+                                    </li>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <li class="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-500">No income entries yet.</li>
+                            <?php endif; ?>
+                        </ul>
                     </div>
                 </div>
-            </div>
-        </div>
+            </section>
 
-        <div class="tab-pane fade <?= $activeTab === 'expense' ? 'show active' : '' ?>" id="expense" role="tabpanel" aria-labelledby="expense-tab">
-            <div class="row g-4">
-                <div class="col-lg-6">
-                    <div class="form-section">
-                        <h4 class="mb-3">Add Expense</h4>
-                        <form action="save_transaction.php" method="post" class="row g-3 needs-validation" novalidate>
+            <section data-tab-panel="expense" class="<?= htmlspecialchars($panelBaseClass, ENT_QUOTES) ?> <?= $activeTab === 'expense' ? '' : 'hidden' ?>">
+                <div class="grid gap-6 lg:grid-cols-2">
+                    <div class="rounded-3xl bg-white/80 p-6 shadow-lg shadow-slate-200/80 ring-1 ring-slate-100/80 backdrop-blur">
+                        <h2 class="text-xl font-semibold text-slate-900">Add expense</h2>
+                        <p class="mt-1 text-sm text-slate-500">Track outgoing payments and classify whether they were made via cash or click.</p>
+                        <form action="save_transaction.php" method="post" class="mt-6 space-y-5">
                             <input type="hidden" name="transaction_type" value="expense">
-                            <div class="col-12">
-                                <label for="expenseAmount" class="form-label">Amount</label>
-                                <input type="number" step="0.01" class="form-control" id="expenseAmount" name="amount" value="<?= htmlspecialchars($expenseForm['amount']) ?>" required>
-                                <div class="invalid-feedback">Please enter the expense amount.</div>
+                            <div>
+                                <label for="expenseAmount" class="text-sm font-medium text-slate-600">Amount</label>
+                                <input type="number" step="0.01" class="mt-2 block w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-900 shadow-inner shadow-slate-100/60 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200" id="expenseAmount" name="amount" value="<?= htmlspecialchars($expenseForm['amount']) ?>" required>
                             </div>
-                            <div class="col-12">
-                                <label for="expenseDate" class="form-label">Date</label>
-                                <input type="date" class="form-control" id="expenseDate" name="date" value="<?= htmlspecialchars($expenseForm['date']) ?>" required>
-                                <div class="invalid-feedback">Please select a valid date.</div>
+                            <div>
+                                <label for="expenseDate" class="text-sm font-medium text-slate-600">Date</label>
+                                <input type="date" class="mt-2 block w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-900 shadow-inner shadow-slate-100/60 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200" id="expenseDate" name="date" value="<?= htmlspecialchars($expenseForm['date']) ?>" required>
                             </div>
-                            <div class="col-12">
-                                <label for="expenseMethod" class="form-label">Payment Method</label>
-                                <select class="form-select" id="expenseMethod" name="payment_method" required>
-                                    <option value="" disabled <?= $expenseForm['payment_method'] === '' ? 'selected' : '' ?>>Choose...</option>
+                            <div>
+                                <label for="expenseMethod" class="text-sm font-medium text-slate-600">Payment method</label>
+                                <select class="mt-2 block w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-900 shadow-inner shadow-slate-100/60 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200" id="expenseMethod" name="payment_method" required>
+                                    <option value="" disabled <?= $expenseForm['payment_method'] === '' ? 'selected' : '' ?>>Choose…</option>
                                     <option value="cash" <?= $expenseForm['payment_method'] === 'cash' ? 'selected' : '' ?>>Cash</option>
                                     <option value="click" <?= $expenseForm['payment_method'] === 'click' ? 'selected' : '' ?>>Click</option>
                                 </select>
-                                <div class="invalid-feedback">Select a payment method.</div>
                             </div>
-                            <div class="col-12">
-                                <label for="expenseComment" class="form-label">Comment</label>
-                                <textarea class="form-control" id="expenseComment" name="comment" rows="3" placeholder="Optional details"><?= htmlspecialchars($expenseForm['comment']) ?></textarea>
+                            <div>
+                                <label for="expenseComment" class="text-sm font-medium text-slate-600">Comment</label>
+                                <textarea class="mt-2 block w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-900 shadow-inner shadow-slate-100/60 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200" id="expenseComment" name="comment" rows="3" placeholder="Optional details"><?= htmlspecialchars($expenseForm['comment']) ?></textarea>
                             </div>
-                            <div class="col-12">
-                                <button type="submit" class="btn btn-danger w-100">Save Expense</button>
+                            <button type="submit" class="w-full rounded-full bg-rose-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-rose-300/50 transition hover:-translate-y-0.5 hover:bg-rose-600">Save expense</button>
+                        </form>
+                    </div>
+                    <div class="rounded-3xl bg-white/80 p-6 shadow-lg shadow-slate-200/80 ring-1 ring-slate-100/80 backdrop-blur">
+                        <h2 class="text-xl font-semibold text-slate-900">Expense snapshot</h2>
+                        <p class="mt-1 text-sm text-slate-500">Spot where your spending is going at a glance.</p>
+                        <dl class="mt-6 space-y-4 text-sm text-slate-600">
+                            <div class="flex items-center justify-between">
+                                <dt>Total expense</dt>
+                                <dd class="text-base font-semibold text-slate-900"><?= number_format((float) $totals['total_expense'], 2) ?></dd>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <dt>Monthly expense</dt>
+                                <dd class="text-base font-semibold text-slate-900"><?= number_format((float) $totals['monthly_expense'], 2) ?></dd>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <dt>Cash expense</dt>
+                                <dd class="text-base font-semibold text-amber-600"><?= number_format((float) $totals['total_expense_cash'], 2) ?></dd>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <dt>Click expense</dt>
+                                <dd class="text-base font-semibold text-indigo-600"><?= number_format((float) $totals['total_expense_click'], 2) ?></dd>
+                            </div>
+                        </dl>
+                        <h3 class="mt-6 text-sm font-semibold uppercase tracking-[0.22em] text-slate-400">Recent notes</h3>
+                        <ul class="mt-3 space-y-3">
+                            <?php if ($recentExpense): ?>
+                                <?php foreach (array_slice($recentExpense, 0, 5) as $expense): ?>
+                                    <li class="rounded-2xl border border-slate-100/70 bg-white/80 px-4 py-3 text-sm shadow-sm">
+                                        <div class="flex items-center justify-between">
+                                            <span class="font-medium text-slate-800"><?= htmlspecialchars($expense['date']) ?></span>
+                                            <span class="font-semibold text-rose-600">-<?= number_format((float) $expense['payment'], 2) ?></span>
+                                        </div>
+                                        <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                                            <span class="rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-600"><?= htmlspecialchars($expense['method']) ?></span>
+                                            <?php if (!empty($expense['comment'])): ?>
+                                                <span><?= htmlspecialchars($expense['comment']) ?></span>
+                                            <?php endif; ?>
+                                        </div>
+                                    </li>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <li class="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-500">No expense entries yet.</li>
+                            <?php endif; ?>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <section data-tab-panel="reports" class="<?= htmlspecialchars($panelBaseClass, ENT_QUOTES) ?> <?= $activeTab === 'reports' ? '' : 'hidden' ?>">
+                <div class="rounded-3xl border border-slate-100/70 bg-white/80 p-6 shadow-lg shadow-slate-200/70 backdrop-blur">
+                    <div class="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                        <div class="space-y-2">
+                            <h2 class="text-2xl font-semibold text-slate-900">Dynamic reports</h2>
+                            <p class="text-sm text-slate-500">Review income and expenses between <strong><?= htmlspecialchars($reportRangeLabel) ?></strong>.</p>
+                        </div>
+                        <form id="reportsFilterForm" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" method="get">
+                            <input type="hidden" name="tab" value="reports">
+                            <label class="text-sm font-medium text-slate-600">
+                                <span class="block">Start date</span>
+                                <input type="date" class="mt-2 block w-full rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-sm text-slate-900 shadow-inner shadow-slate-100/60 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200" id="reportStart" name="start_date" value="<?= htmlspecialchars($reportStartInput) ?>" required>
+                            </label>
+                            <label class="text-sm font-medium text-slate-600">
+                                <span class="block">End date</span>
+                                <input type="date" class="mt-2 block w-full rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-sm text-slate-900 shadow-inner shadow-slate-100/60 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200" id="reportEnd" name="end_date" value="<?= htmlspecialchars($reportEndInput) ?>" required>
+                            </label>
+                            <div class="sm:col-span-2 lg:col-span-1 lg:place-self-end">
+                                <button type="submit" class="w-full rounded-full bg-gradient-to-r from-indigo-500 via-sky-500 to-cyan-400 px-5 py-3 text-sm font-semibold text-white shadow-glow transition hover:brightness-110">Update report</button>
                             </div>
                         </form>
                     </div>
-                </div>
-                <div class="col-lg-6">
-                    <div class="card glass-card border-0">
-                        <div class="card-header">Expense Overview</div>
-                        <div class="card-body">
-                            <p class="mb-2">Total Expense: <strong><?= number_format((float) $totals['total_expense'], 2) ?></strong></p>
-                            <p class="mb-2">Monthly Expense: <strong><?= number_format((float) $totals['monthly_expense'], 2) ?></strong></p>
-                            <p class="mb-2">Cash Expense: <strong><?= number_format((float) $totals['total_expense_cash'], 2) ?></strong></p>
-                            <p class="mb-2">Click Expense: <strong><?= number_format((float) $totals['total_expense_click'], 2) ?></strong></p>
-                            <p class="mb-3 small text-muted">This month — Cash: <?= number_format((float) $totals['monthly_expense_cash'], 2) ?> · Click: <?= number_format((float) $totals['monthly_expense_click'], 2) ?></p>
-                            <p class="mb-0">Recent Notes:</p>
-                            <ul class="list-group list-group-flush">
-                                <?php if ($recentExpense): ?>
-                                    <?php foreach (array_slice($recentExpense, 0, 5) as $expense): ?>
-                                        <li class="list-group-item">
-                                            <div class="d-flex justify-content-between">
-                                                <span><?= htmlspecialchars($expense['date']) ?></span>
-                                                <span><?= number_format((float) $expense['payment'], 2) ?></span>
-                                            </div>
-                                            <small class="text-muted">Method: <?= htmlspecialchars($expense['method']) ?><?php if (!empty($expense['comment'])): ?> · <?= htmlspecialchars($expense['comment']) ?><?php endif; ?></small>
-                                        </li>
-                                    <?php endforeach; ?>
-                                <?php else: ?>
-                                    <li class="list-group-item">No expense entries yet.</li>
-                                <?php endif; ?>
+
+                    <?php if ($filterWarnings): ?>
+                        <div class="mt-6 rounded-2xl border border-amber-200/80 bg-amber-50/90 px-5 py-4 text-sm text-amber-900 shadow-sm">
+                            <p class="font-semibold">We adjusted your filter:</p>
+                            <ul class="mt-2 list-disc space-y-1 pl-5">
+                                <?php foreach ($filterWarnings as $warning): ?>
+                                    <li><?= htmlspecialchars($warning) ?></li>
+                                <?php endforeach; ?>
                             </ul>
                         </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+                    <?php endif; ?>
 
-        <div class="tab-pane fade <?= $activeTab === 'reports' ? 'show active' : '' ?>" id="reports" role="tabpanel" aria-labelledby="reports-tab">
-            <div class="glass-card p-4 p-lg-5 mb-4">
-                <div class="d-flex flex-column flex-xl-row justify-content-between align-items-xl-end gap-4">
-                    <div>
-                        <h2 class="h5 fw-semibold mb-2">Dynamic financial reports</h2>
-                        <p class="mb-0 text-muted-soft">Review income and expenses between <strong><?= htmlspecialchars($reportRangeLabel) ?></strong>.</p>
-                    </div>
-                    <form id="reportsFilterForm" class="row g-3 align-items-end reports-filter p-3 p-lg-4" method="get">
-                        <input type="hidden" name="tab" value="reports">
-                        <div class="col-md-4">
-                            <label for="reportStart" class="form-label">Start date</label>
-                            <input type="date" class="form-control" id="reportStart" name="start_date" value="<?= htmlspecialchars($reportStartInput) ?>" required>
-                        </div>
-                        <div class="col-md-4">
-                            <label for="reportEnd" class="form-label">End date</label>
-                            <input type="date" class="form-control" id="reportEnd" name="end_date" value="<?= htmlspecialchars($reportEndInput) ?>" required>
-                        </div>
-                        <div class="col-md-4 col-xl-3">
-                            <button type="submit" class="btn btn-primary w-100">
-                                <i class="bi bi-arrow-repeat me-2"></i>Update report
+                    <div class="mt-6 flex flex-wrap gap-2">
+                        <?php foreach ($quickRanges as $range): ?>
+                            <button type="button" class="rounded-full border border-slate-200 bg-white/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 transition hover:border-sky-300 hover:text-sky-600" data-range-start="<?= htmlspecialchars($range['start']) ?>" data-range-end="<?= htmlspecialchars($range['end']) ?>">
+                                <?= htmlspecialchars($range['label']) ?>
                             </button>
-                        </div>
-                    </form>
-                </div>
-                <?php if ($filterWarnings): ?>
-                    <div class="alert alert-warning mt-3 mb-0" role="alert">
-                        <h3 class="h6 mb-2">We adjusted your filter</h3>
-                        <ul class="mb-0 ps-3">
-                            <?php foreach ($filterWarnings as $warning): ?>
-                                <li><?= htmlspecialchars($warning) ?></li>
-                            <?php endforeach; ?>
-                        </ul>
+                        <?php endforeach; ?>
                     </div>
-                <?php endif; ?>
-                <div class="quick-range d-flex flex-wrap gap-2 mt-4">
-                    <?php foreach ($quickRanges as $range): ?>
-                        <button type="button" class="btn btn-outline-primary btn-sm" data-range-start="<?= htmlspecialchars($range['start']) ?>" data-range-end="<?= htmlspecialchars($range['end']) ?>">
-                            <?= htmlspecialchars($range['label']) ?>
-                        </button>
-                    <?php endforeach; ?>
                 </div>
-            </div>
 
-            <div class="row g-4 reports-summary mb-4">
-                <div class="col-md-4">
-                    <div class="stat-card p-4 h-100">
-                        <div class="d-flex align-items-center gap-3">
-                            <div class="icon-badge">
-                                <i class="bi bi-graph-up"></i>
-                            </div>
+                <div class="grid gap-6 md:grid-cols-2">
+                    <div class="rounded-3xl border border-slate-100/70 bg-white/80 p-6 shadow-lg shadow-slate-200/70 backdrop-blur">
+                        <div class="flex items-center gap-3">
+                            <span class="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="h-5 w-5">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 3v5.25H6" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 20.25H18a.75.75 0 00.75-.75V9l-6-6H6a.75.75 0 00-.75.75v12a.75.75 0 00.75.75z" />
+                                </svg>
+                            </span>
                             <div>
-                                <p class="small-caps mb-1">Income</p>
-                                <h3 class="h4 mb-0"><?= number_format((float) $rangeSummary['income'], 2) ?></h3>
-                                <small class="text-muted-soft">Captured in the selected period</small>
+                                <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Income</p>
+                                <p class="mt-1 text-2xl font-semibold text-slate-900"><?= number_format((float) $rangeSummary['income'], 2) ?></p>
+                                <p class="text-sm text-slate-500">Captured within the selected range</p>
                             </div>
                         </div>
                     </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="stat-card p-4 h-100">
-                        <div class="d-flex align-items-center gap-3">
-                            <div class="icon-badge">
-                                <i class="bi bi-cash-coin"></i>
-                            </div>
+                    <div class="rounded-3xl border border-slate-100/70 bg-white/80 p-6 shadow-lg shadow-slate-200/70 backdrop-blur">
+                        <div class="flex items-center gap-3">
+                            <span class="flex h-11 w-11 items-center justify-center rounded-2xl bg-rose-100 text-rose-600">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="h-5 w-5">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12.75 21v-5.25H18" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M18.75 3.75H6a.75.75 0 00-.75.75v12l6 6h7.5a.75.75 0 00.75-.75V4.5a.75.75 0 00-.75-.75z" />
+                                </svg>
+                            </span>
                             <div>
-                                <p class="small-caps mb-1">Expense</p>
-                                <h3 class="h4 mb-0"><?= number_format((float) $rangeSummary['expense'], 2) ?></h3>
-                                <small class="text-muted-soft">Money out within the range</small>
+                                <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Expense</p>
+                                <p class="mt-1 text-2xl font-semibold text-slate-900"><?= number_format((float) $rangeSummary['expense'], 2) ?></p>
+                                <p class="text-sm text-slate-500">Money leaving in the same window</p>
                             </div>
                         </div>
                     </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="stat-card p-4 h-100">
-                        <div class="d-flex align-items-center gap-3">
-                            <div class="icon-badge">
-                                <i class="bi bi-piggy-bank"></i>
-                            </div>
-                            <div>
-                                <p class="small-caps mb-1">Net balance</p>
-                                <h3 class="h4 mb-0 <?= $rangeSummary['balance'] >= 0 ? 'text-success' : 'text-danger' ?>"><?= number_format((float) $rangeSummary['balance'], 2) ?></h3>
-                                <small class="text-muted-soft">Income minus expense</small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="row g-4">
-                <div class="col-lg-8">
-                    <div class="glass-card p-4 h-100">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h3 class="h6 mb-0 fw-semibold"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Income vs Expense</h3>
-                            <span class="badge badge-soft"><?= htmlspecialchars($reportRangeLabel) ?></span>
-                        </div>
-                        <div class="chart-container chart-container--wide">
-                            <canvas id="incomeExpenseChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-lg-4">
-                    <div class="glass-card p-4 mb-4">
-                        <div class="d-flex align-items-center mb-3">
-                            <i class="bi bi-activity text-primary me-2"></i>
-                            <h3 class="h6 mb-0 fw-semibold">Monthly balance trend</h3>
-                        </div>
-                        <div class="chart-container" style="height: 260px;">
-                            <canvas id="balanceTrendChart"></canvas>
-                        </div>
-                    </div>
-                    <div class="glass-card p-4">
-                        <div class="d-flex align-items-center mb-3">
-                            <i class="bi bi-wallet2 text-primary me-2"></i>
-                            <h3 class="h6 mb-0 fw-semibold">Payment methods split</h3>
-                        </div>
-                        <div class="row g-3">
-                            <div class="col-6">
-                                <div class="text-center">
-                                    <span class="small-caps d-block mb-2">Income</span>
-                                    <div class="chart-container" style="height: 180px;">
-                                        <canvas id="incomeMethodChart"></canvas>
+                    <div class="rounded-3xl border border-slate-100/70 bg-white/80 p-6 shadow-lg shadow-slate-200/70 backdrop-blur md:col-span-2">
+                        <div class="flex items-center gap-3">
+                            <span class="flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-100 text-sky-600">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="h-5 w-5">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 9.75l8.25 8.25 8.25-8.25" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 4.5l8.25 8.25L20.25 4.5" />
+                                </svg>
+                            </span>
+                            <div class="flex-1">
+                                <div class="flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                        <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Balance</p>
+                                        <p class="mt-1 text-2xl font-semibold text-slate-900"><?= number_format((float) $rangeSummary['balance'], 2) ?></p>
                                     </div>
-                                </div>
-                            </div>
-                            <div class="col-6">
-                                <div class="text-center">
-                                    <span class="small-caps d-block mb-2">Expense</span>
-                                    <div class="chart-container" style="height: 180px;">
-                                        <canvas id="expenseMethodChart"></canvas>
+                                    <div class="flex gap-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                                        <span class="rounded-full bg-emerald-50 px-3 py-1 text-emerald-600">Income cash <?= number_format((float) $rangeSummary['income_cash'], 2) ?></span>
+                                        <span class="rounded-full bg-sky-50 px-3 py-1 text-sky-600">Income click <?= number_format((float) $rangeSummary['income_click'], 2) ?></span>
+                                        <span class="rounded-full bg-amber-50 px-3 py-1 text-amber-600">Expense cash <?= number_format((float) $rangeSummary['expense_cash'], 2) ?></span>
+                                        <span class="rounded-full bg-indigo-50 px-3 py-1 text-indigo-600">Expense click <?= number_format((float) $rangeSummary['expense_click'], 2) ?></span>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <div class="glass-card p-4 p-lg-5 mt-4">
-                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3">
-                    <div class="d-flex align-items-center gap-2">
-                        <i class="bi bi-calendar3 text-primary"></i>
-                        <h3 class="h6 mb-0 fw-semibold">Monthly breakdown</h3>
+                <div class="grid gap-6 lg:grid-cols-2">
+                    <div class="rounded-3xl border border-slate-100/70 bg-white/80 p-6 shadow-lg shadow-slate-200/70 backdrop-blur">
+                        <h3 class="text-lg font-semibold text-slate-900">Income vs expense</h3>
+                        <p class="text-sm text-slate-500">Monthly totals across the selected range.</p>
+                        <div class="mt-6 h-80">
+                            <canvas id="incomeExpenseChart" class="h-full w-full"></canvas>
+                        </div>
                     </div>
-                    <span class="text-muted-soft small">Values reflect actual activity within each month of the selected period.</span>
+                    <div class="rounded-3xl border border-slate-100/70 bg-white/80 p-6 shadow-lg shadow-slate-200/70 backdrop-blur">
+                        <h3 class="text-lg font-semibold text-slate-900">Balance trend</h3>
+                        <p class="text-sm text-slate-500">Track how net balance evolves month over month.</p>
+                        <div class="mt-6 h-80">
+                            <canvas id="balanceTrendChart" class="h-full w-full"></canvas>
+                        </div>
+                    </div>
+                    <div class="rounded-3xl border border-slate-100/70 bg-white/80 p-6 shadow-lg shadow-slate-200/70 backdrop-blur">
+                        <h3 class="text-lg font-semibold text-slate-900">Income payment mix</h3>
+                        <p class="text-sm text-slate-500">Distribution of cash and click income inside your range.</p>
+                        <div class="mt-6 h-72">
+                            <canvas id="incomeMethodChart" class="h-full w-full"></canvas>
+                        </div>
+                    </div>
+                    <div class="rounded-3xl border border-slate-100/70 bg-white/80 p-6 shadow-lg shadow-slate-200/70 backdrop-blur">
+                        <h3 class="text-lg font-semibold text-slate-900">Expense payment mix</h3>
+                        <p class="text-sm text-slate-500">See which payment method covers your expenses.</p>
+                        <div class="mt-6 h-72">
+                            <canvas id="expenseMethodChart" class="h-full w-full"></canvas>
+                        </div>
+                    </div>
                 </div>
-                <div class="table-responsive">
-                    <table class="table align-middle mb-0">
-                        <thead class="table-light">
-                        <tr>
-                            <th scope="col">Period</th>
-                            <th scope="col" class="text-end">Income</th>
-                            <th scope="col" class="text-end">Expense</th>
-                            <th scope="col" class="text-end">Balance</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        <?php if ($reportTable): ?>
-                            <?php foreach ($reportTable as $row): ?>
+
+                <div class="rounded-3xl border border-slate-100/70 bg-white/80 p-6 shadow-lg shadow-slate-200/70 backdrop-blur">
+                    <div class="flex flex-wrap items-end justify-between gap-3">
+                        <div>
+                            <h3 class="text-lg font-semibold text-slate-900">Monthly breakdown</h3>
+                            <p class="text-sm text-slate-500">Detailed figures per month in the selected range.</p>
+                        </div>
+                    </div>
+                    <div class="mt-6 overflow-hidden rounded-2xl border border-slate-100/80">
+                        <table class="min-w-full divide-y divide-slate-100 text-sm">
+                            <thead class="bg-slate-50/80 text-slate-500">
                                 <tr>
-                                    <td><?= htmlspecialchars($row['label']) ?></td>
-                                    <td class="text-end"><?= number_format((float) $row['income'], 2) ?></td>
-                                    <td class="text-end"><?= number_format((float) $row['expense'], 2) ?></td>
-                                    <td class="text-end <?= $row['balance'] >= 0 ? 'text-success' : 'text-danger' ?>"><?= number_format((float) $row['balance'], 2) ?></td>
+                                    <th scope="col" class="px-4 py-3 text-left font-semibold uppercase tracking-[0.2em]">Month</th>
+                                    <th scope="col" class="px-4 py-3 text-left font-semibold uppercase tracking-[0.2em]">Income</th>
+                                    <th scope="col" class="px-4 py-3 text-left font-semibold uppercase tracking-[0.2em]">Expense</th>
+                                    <th scope="col" class="px-4 py-3 text-left font-semibold uppercase tracking-[0.2em]">Balance</th>
                                 </tr>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <tr>
-                                <td colspan="4" class="text-center py-3">Not enough data to generate a report.</td>
-                            </tr>
-                        <?php endif; ?>
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100/80 bg-white/90 text-slate-600">
+                                <?php foreach ($reportTable as $row): ?>
+                                    <tr>
+                                        <td class="px-4 py-3 font-medium text-slate-800"><?= htmlspecialchars($row['label']) ?></td>
+                                        <td class="px-4 py-3 text-emerald-600"><?= number_format((float) $row['income'], 2) ?></td>
+                                        <td class="px-4 py-3 text-rose-600"><?= number_format((float) $row['expense'], 2) ?></td>
+                                        <td class="px-4 py-3 font-semibold <?= $row['balance'] >= 0 ? 'text-emerald-600' : 'text-rose-600' ?>"><?= number_format((float) $row['balance'], 2) ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                <?php if (!$reportTable): ?>
+                                    <tr>
+                                        <td colspan="4" class="px-4 py-6 text-center text-sm text-slate-500">No records for this period.</td>
+                                    </tr>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-            </div>
+            </section>
         </div>
     </div>
-</div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const validationForms = document.querySelectorAll('.needs-validation');
-        Array.prototype.slice.call(validationForms).forEach(function (form) {
-            form.addEventListener('submit', function (event) {
-                if (!form.checkValidity()) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                }
-                form.classList.add('was-validated');
-            }, false);
-        });
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const tabButtons = document.querySelectorAll('[data-tab-target]');
+            const tabPanels = document.querySelectorAll('[data-tab-panel]');
 
-        const tabs = document.querySelectorAll('#cashflowTabs button[data-bs-toggle="tab"]');
-        tabs.forEach(function (tabButton) {
-            tabButton.addEventListener('shown.bs.tab', function (event) {
-                const targetId = event.target.getAttribute('data-bs-target');
-                if (!targetId) {
-                    return;
-                }
-                const tabName = targetId.replace('#', '');
-                const url = new URL(window.location.href);
-                url.searchParams.set('tab', tabName);
-                const newUrl = url.pathname + url.search + url.hash;
-                history.replaceState(null, '', newUrl);
+            function activateTab(id) {
+                tabButtons.forEach((btn) => {
+                    const target = btn.getAttribute('data-tab-target');
+                    const activeClass = btn.getAttribute('data-active-class') || '';
+                    const inactiveClass = btn.getAttribute('data-inactive-class') || '';
+                    if (target === id) {
+                        btn.classList.add(...activeClass.split(' ').filter(Boolean));
+                        btn.classList.remove(...inactiveClass.split(' ').filter(Boolean));
+                        btn.setAttribute('aria-selected', 'true');
+                    } else {
+                        btn.classList.add(...inactiveClass.split(' ').filter(Boolean));
+                        btn.classList.remove(...activeClass.split(' ').filter(Boolean));
+                        btn.setAttribute('aria-selected', 'false');
+                    }
+                });
+
+                tabPanels.forEach((panel) => {
+                    panel.classList.toggle('hidden', panel.getAttribute('data-tab-panel') !== id);
+                });
+
+                const url = new URL(window.location);
+                url.searchParams.set('tab', id);
+                window.history.replaceState({}, '', url);
+            }
+
+            tabButtons.forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    activateTab(btn.getAttribute('data-tab-target'));
+                });
             });
-        });
 
-        const reportLabels = <?= json_encode($reportLabels) ?>;
-        const reportIncome = <?= json_encode($reportIncome) ?>;
-        const reportExpense = <?= json_encode($reportExpense) ?>;
-        const reportBalance = <?= json_encode($reportBalance) ?>;
-        const incomeMethodData = <?= json_encode($incomeMethodData) ?>;
-        const expenseMethodData = <?= json_encode($expenseMethodData) ?>;
-
-        const reportsForm = document.getElementById('reportsFilterForm');
-        const quickRangeButtons = document.querySelectorAll('.quick-range button[data-range-start]');
-        if (reportsForm) {
-            const startInput = reportsForm.querySelector('input[name="start_date"]');
-            const endInput = reportsForm.querySelector('input[name="end_date"]');
-            quickRangeButtons.forEach(function (button) {
-                button.addEventListener('click', function () {
-                    if (startInput && endInput) {
+            const reportsForm = document.getElementById('reportsFilterForm');
+            const quickRangeButtons = document.querySelectorAll('[data-range-start]');
+            if (reportsForm && quickRangeButtons.length) {
+                quickRangeButtons.forEach((button) => {
+                    button.addEventListener('click', () => {
+                        const startInput = reportsForm.querySelector('[name="start_date"]');
+                        const endInput = reportsForm.querySelector('[name="end_date"]');
                         const startValue = button.getAttribute('data-range-start');
                         const endValue = button.getAttribute('data-range-end');
-                        if (startValue) {
+                        if (startInput) {
                             startInput.value = startValue;
                         }
-                        if (endValue) {
+                        if (endInput) {
                             endInput.value = endValue;
                         }
                         if (typeof reportsForm.requestSubmit === 'function') {
@@ -1083,168 +1003,175 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
                         } else {
                             reportsForm.submit();
                         }
-                    }
+                    });
                 });
-            });
-        }
+            }
 
-        const incomeExpenseCanvas = document.getElementById('incomeExpenseChart');
-        if (incomeExpenseCanvas && reportLabels.length) {
-            new Chart(incomeExpenseCanvas, {
-                type: 'bar',
-                data: {
-                    labels: reportLabels,
-                    datasets: [
-                        {
-                            label: 'Income',
-                            data: reportIncome,
-                            backgroundColor: 'rgba(34, 197, 94, 0.75)',
-                            borderRadius: 12,
-                            borderSkipped: false,
-                        },
-                        {
-                            label: 'Expense',
-                            data: reportExpense,
-                            backgroundColor: 'rgba(239, 68, 68, 0.75)',
-                            borderRadius: 12,
-                            borderSkipped: false,
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: {
-                            grid: {
-                                display: false
-                            }
-                        },
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                callback: function (value) {
-                                    return new Intl.NumberFormat('en-US', {
-                                        style: 'currency',
-                                        currency: 'UZS',
-                                        maximumFractionDigits: 0
-                                    }).format(value);
-                                }
-                            }
-                        }
+            const reportLabels = <?= json_encode($reportLabels) ?>;
+            const reportIncome = <?= json_encode($reportIncome) ?>;
+            const reportExpense = <?= json_encode($reportExpense) ?>;
+            const reportBalance = <?= json_encode($reportBalance) ?>;
+            const incomeMethodData = <?= json_encode($incomeMethodData) ?>;
+            const expenseMethodData = <?= json_encode($expenseMethodData) ?>;
+
+            const incomeExpenseCanvas = document.getElementById('incomeExpenseChart');
+            if (incomeExpenseCanvas && reportLabels.length) {
+                new Chart(incomeExpenseCanvas, {
+                    type: 'bar',
+                    data: {
+                        labels: reportLabels,
+                        datasets: [
+                            {
+                                label: 'Income',
+                                data: reportIncome,
+                                backgroundColor: 'rgba(34, 197, 94, 0.75)',
+                                borderRadius: 14,
+                                borderSkipped: false,
+                            },
+                            {
+                                label: 'Expense',
+                                data: reportExpense,
+                                backgroundColor: 'rgba(244, 63, 94, 0.75)',
+                                borderRadius: 14,
+                                borderSkipped: false,
+                            },
+                        ],
                     },
-                    plugins: {
-                        legend: {
-                            position: 'bottom'
-                        }
-                    }
-                }
-            });
-        }
-
-        const balanceTrendCanvas = document.getElementById('balanceTrendChart');
-        if (balanceTrendCanvas && reportLabels.length) {
-            new Chart(balanceTrendCanvas, {
-                type: 'line',
-                data: {
-                    labels: reportLabels,
-                    datasets: [
-                        {
-                            label: 'Net balance',
-                            data: reportBalance,
-                            fill: true,
-                            borderColor: 'rgba(99, 102, 241, 1)',
-                            backgroundColor: 'rgba(99, 102, 241, 0.2)',
-                            tension: 0.35,
-                            pointBackgroundColor: 'rgba(99, 102, 241, 1)',
-                            pointBorderWidth: 0,
-                            pointRadius: 4,
-                            pointHoverRadius: 6,
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    },
-                    scales: {
-                        x: {
-                            grid: {
-                                display: false
-                            }
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                grid: { display: false },
+                                ticks: { color: '#64748b' },
+                            },
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    color: '#64748b',
+                                    callback: function (value) {
+                                        return new Intl.NumberFormat('en-US', {
+                                            style: 'currency',
+                                            currency: 'UZS',
+                                            maximumFractionDigits: 0,
+                                        }).format(value);
+                                    },
+                                },
+                            },
                         },
-                        y: {
-                            ticks: {
-                                callback: function (value) {
-                                    return new Intl.NumberFormat('en-US', {
-                                        style: 'currency',
-                                        currency: 'UZS',
-                                        maximumFractionDigits: 0
-                                    }).format(value);
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        }
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: { color: '#0f172a' },
+                            },
+                        },
+                    },
+                });
+            }
 
-        const incomeMethodCanvas = document.getElementById('incomeMethodChart');
-        if (incomeMethodCanvas) {
-            new Chart(incomeMethodCanvas, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Cash', 'Click'],
-                    datasets: [
-                        {
-                            data: incomeMethodData,
-                            backgroundColor: ['rgba(34, 197, 94, 0.8)', 'rgba(14, 165, 233, 0.8)'],
-                            borderWidth: 0,
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom'
-                        }
-                    }
-                }
-            });
-        }
+            const balanceTrendCanvas = document.getElementById('balanceTrendChart');
+            if (balanceTrendCanvas && reportLabels.length) {
+                new Chart(balanceTrendCanvas, {
+                    type: 'line',
+                    data: {
+                        labels: reportLabels,
+                        datasets: [
+                            {
+                                label: 'Net balance',
+                                data: reportBalance,
+                                fill: true,
+                                borderColor: 'rgba(99, 102, 241, 1)',
+                                backgroundColor: 'rgba(99, 102, 241, 0.18)',
+                                tension: 0.35,
+                                pointBackgroundColor: 'rgba(99, 102, 241, 1)',
+                                pointBorderWidth: 0,
+                                pointRadius: 4,
+                                pointHoverRadius: 6,
+                            },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                        },
+                        scales: {
+                            x: {
+                                grid: { display: false },
+                                ticks: { color: '#64748b' },
+                            },
+                            y: {
+                                ticks: {
+                                    color: '#64748b',
+                                    callback: function (value) {
+                                        return new Intl.NumberFormat('en-US', {
+                                            style: 'currency',
+                                            currency: 'UZS',
+                                            maximumFractionDigits: 0,
+                                        }).format(value);
+                                    },
+                                },
+                            },
+                        },
+                    },
+                });
+            }
 
-        const expenseMethodCanvas = document.getElementById('expenseMethodChart');
-        if (expenseMethodCanvas) {
-            new Chart(expenseMethodCanvas, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Cash', 'Click'],
-                    datasets: [
-                        {
-                            data: expenseMethodData,
-                            backgroundColor: ['rgba(239, 68, 68, 0.85)', 'rgba(99, 102, 241, 0.85)'],
-                            borderWidth: 0,
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom'
-                        }
-                    }
-                }
-            });
-        }
-    });
-</script>
+            const incomeMethodCanvas = document.getElementById('incomeMethodChart');
+            if (incomeMethodCanvas) {
+                new Chart(incomeMethodCanvas, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Cash', 'Click'],
+                        datasets: [
+                            {
+                                data: incomeMethodData,
+                                backgroundColor: ['rgba(34, 197, 94, 0.85)', 'rgba(14, 165, 233, 0.85)'],
+                                borderWidth: 0,
+                            },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: { color: '#0f172a' },
+                            },
+                        },
+                    },
+                });
+            }
+
+            const expenseMethodCanvas = document.getElementById('expenseMethodChart');
+            if (expenseMethodCanvas) {
+                new Chart(expenseMethodCanvas, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Cash', 'Click'],
+                        datasets: [
+                            {
+                                data: expenseMethodData,
+                                backgroundColor: ['rgba(244, 114, 182, 0.85)', 'rgba(99, 102, 241, 0.85)'],
+                                borderWidth: 0,
+                            },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: { color: '#0f172a' },
+                            },
+                        },
+                    },
+                });
+            }
+        });
+    </script>
 </body>
 </html>
