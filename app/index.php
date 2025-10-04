@@ -441,12 +441,7 @@ function uzs(float $value): string
 </head>
 <body class="min-h-screen bg-gradient-to-b from-primary-50 via-white to-white text-slate-900">
     <div class="absolute inset-x-0 top-0 -z-10 h-40 bg-gradient-to-b from-white/0 via-white/60 to-white"></div>
-    <div class="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-        <div class="flex flex-col gap-3">
-            <p class="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">Moliyaviy boshqaruv</p>
-            <h1 class="text-3xl font-semibold text-slate-900 sm:text-4xl">Naqd oqim paneli</h1>
-            <p class="max-w-2xl text-sm text-slate-500 sm:text-base">Daromad va xarajatlarni kuzatish, turkumlarni tahlil qilish va to'lov usullarini solishtirish uchun zamonaviy boshqaruv paneli.</p>
-        </div>
+    <div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
 
         <?php if ($flashMessage): ?>
             <?php
@@ -482,7 +477,7 @@ function uzs(float $value): string
             </div>
         <?php endif; ?>
 
-        <nav class="mt-8 flex flex-wrap items-center gap-2 rounded-2xl border border-white/60 bg-white/70 p-2 shadow-sm shadow-slate-200/60 backdrop-blur">
+        <nav class="mt-6 flex flex-wrap items-center gap-2 rounded-2xl border border-white/60 bg-white/70 p-2 shadow-sm shadow-slate-200/60 backdrop-blur">
             <?php
             $tabs = [
                 'overview' => 'Umumiy',
