@@ -16,8 +16,16 @@ $dbErrors = [];
 $totalsSql = "SELECT
         COALESCE(SUM(CASE WHEN cash_in = 1 THEN payment END), 0) AS total_income,
         COALESCE(SUM(CASE WHEN cash_out = 1 THEN payment END), 0) AS total_expense,
+        COALESCE(SUM(CASE WHEN cash_in = 1 AND cash = 1 THEN payment END), 0) AS total_income_cash,
+        COALESCE(SUM(CASE WHEN cash_in = 1 AND click = 1 THEN payment END), 0) AS total_income_click,
+        COALESCE(SUM(CASE WHEN cash_out = 1 AND cash = 1 THEN payment END), 0) AS total_expense_cash,
+        COALESCE(SUM(CASE WHEN cash_out = 1 AND click = 1 THEN payment END), 0) AS total_expense_click,
         COALESCE(SUM(CASE WHEN cash_in = 1 AND date >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN payment END), 0) AS monthly_income,
-        COALESCE(SUM(CASE WHEN cash_out = 1 AND date >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN payment END), 0) AS monthly_expense
+        COALESCE(SUM(CASE WHEN cash_out = 1 AND date >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN payment END), 0) AS monthly_expense,
+        COALESCE(SUM(CASE WHEN cash_in = 1 AND cash = 1 AND date >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN payment END), 0) AS monthly_income_cash,
+        COALESCE(SUM(CASE WHEN cash_in = 1 AND click = 1 AND date >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN payment END), 0) AS monthly_income_click,
+        COALESCE(SUM(CASE WHEN cash_out = 1 AND cash = 1 AND date >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN payment END), 0) AS monthly_expense_cash,
+        COALESCE(SUM(CASE WHEN cash_out = 1 AND click = 1 AND date >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN payment END), 0) AS monthly_expense_click
     FROM transactions";
 $totalsResult = $conn->query($totalsSql);
 if ($totalsResult instanceof mysqli_result) {
@@ -27,8 +35,16 @@ if ($totalsResult instanceof mysqli_result) {
     $totals = [
         'total_income' => 0,
         'total_expense' => 0,
+        'total_income_cash' => 0,
+        'total_income_click' => 0,
+        'total_expense_cash' => 0,
+        'total_expense_click' => 0,
         'monthly_income' => 0,
         'monthly_expense' => 0,
+        'monthly_income_cash' => 0,
+        'monthly_income_click' => 0,
+        'monthly_expense_cash' => 0,
+        'monthly_expense_click' => 0,
     ];
     $dbErrors[] = 'Totals could not be loaded. Please check the database connection.';
 }
@@ -289,6 +305,41 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
 
             <div class="row g-3 mt-2">
                 <div class="col-lg-6">
+                    <div class="card border-success h-100">
+                        <div class="card-header text-bg-success bg-opacity-75">Income by Method</div>
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span>Cash</span>
+                                <span class="fw-semibold"><?= number_format((float) $totals['total_income_cash'], 2) ?></span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <span>Click</span>
+                                <span class="fw-semibold"><?= number_format((float) $totals['total_income_click'], 2) ?></span>
+                            </div>
+                            <p class="mb-0 small text-muted">This month — Cash: <?= number_format((float) $totals['monthly_income_cash'], 2) ?> · Click: <?= number_format((float) $totals['monthly_income_click'], 2) ?></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="card border-danger h-100">
+                        <div class="card-header text-bg-danger bg-opacity-75">Expense by Method</div>
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span>Cash</span>
+                                <span class="fw-semibold"><?= number_format((float) $totals['total_expense_cash'], 2) ?></span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <span>Click</span>
+                                <span class="fw-semibold"><?= number_format((float) $totals['total_expense_click'], 2) ?></span>
+                            </div>
+                            <p class="mb-0 small text-muted">This month — Cash: <?= number_format((float) $totals['monthly_expense_cash'], 2) ?> · Click: <?= number_format((float) $totals['monthly_expense_click'], 2) ?></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3 mt-2">
+                <div class="col-lg-6">
                     <div class="card h-100">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <span>Recent Income</span>
@@ -409,6 +460,9 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
                         <div class="card-body">
                             <p class="mb-2">Total Income: <strong><?= number_format((float) $totals['total_income'], 2) ?></strong></p>
                             <p class="mb-2">Monthly Income: <strong><?= number_format((float) $totals['monthly_income'], 2) ?></strong></p>
+                            <p class="mb-2">Cash Income: <strong><?= number_format((float) $totals['total_income_cash'], 2) ?></strong></p>
+                            <p class="mb-2">Click Income: <strong><?= number_format((float) $totals['total_income_click'], 2) ?></strong></p>
+                            <p class="mb-3 small text-muted">This month — Cash: <?= number_format((float) $totals['monthly_income_cash'], 2) ?> · Click: <?= number_format((float) $totals['monthly_income_click'], 2) ?></p>
                             <p class="mb-0">Recent Notes:</p>
                             <ul class="list-group list-group-flush">
                                 <?php if ($recentIncome): ?>
@@ -473,6 +527,9 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
                         <div class="card-body">
                             <p class="mb-2">Total Expense: <strong><?= number_format((float) $totals['total_expense'], 2) ?></strong></p>
                             <p class="mb-2">Monthly Expense: <strong><?= number_format((float) $totals['monthly_expense'], 2) ?></strong></p>
+                            <p class="mb-2">Cash Expense: <strong><?= number_format((float) $totals['total_expense_cash'], 2) ?></strong></p>
+                            <p class="mb-2">Click Expense: <strong><?= number_format((float) $totals['total_expense_click'], 2) ?></strong></p>
+                            <p class="mb-3 small text-muted">This month — Cash: <?= number_format((float) $totals['monthly_expense_cash'], 2) ?> · Click: <?= number_format((float) $totals['monthly_expense_click'], 2) ?></p>
                             <p class="mb-0">Recent Notes:</p>
                             <ul class="list-group list-group-flush">
                                 <?php if ($recentExpense): ?>
