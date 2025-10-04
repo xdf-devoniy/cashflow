@@ -20,6 +20,7 @@ $amount = isset($_POST['amount']) ? (float) $_POST['amount'] : 0;
 $date = $_POST['date'] ?? date('Y-m-d');
 $paymentMethod = $_POST['payment_method'] ?? '';
 $comment = trim($_POST['comment'] ?? '');
+$categoryId = isset($_POST['category_id']) ? (int) $_POST['category_id'] : 0;
 
 $formValues = [
     'transaction_type' => $transactionType,
@@ -27,6 +28,7 @@ $formValues = [
     'date' => $_POST['date'] ?? date('Y-m-d'),
     'payment_method' => $paymentMethod,
     'comment' => $comment,
+    'category_id' => $_POST['category_id'] ?? '',
 ];
 $_SESSION['form_values'] = $formValues;
 
@@ -42,7 +44,7 @@ $validDateTime = DateTime::createFromFormat('Y-m-d', $date);
 $validDate = $validDateTime && $validDateTime->format('Y-m-d') === $date;
 
 if (!$validType || !$validMethod || !$validDate || $amount <= 0) {
-    $_SESSION['flash_message'] = 'Invalid transaction details provided.';
+    $_SESSION['flash_message'] = 'Tranzaksiya ma\'lumotlari noto\'g\'ri kiritildi.';
     $_SESSION['flash_type'] = 'danger';
     header('Location: index.php');
     exit();
@@ -64,7 +66,7 @@ if ($transactionType === 'income') {
 $stmt = $conn->prepare("INSERT INTO transactions (payment, cash, click, cash_in, cash_out, xarajat, comment, date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
 
 if (!$stmt) {
-    $_SESSION['flash_message'] = 'Unable to prepare database statement: ' . $conn->error;
+    $_SESSION['flash_message'] = 'Ma\'lumotlar bazasi so\'rovi tayyorlanmadi: ' . $conn->error;
     $_SESSION['flash_type'] = 'danger';
     header('Location: index.php');
     exit();
@@ -73,11 +75,22 @@ if (!$stmt) {
 $stmt->bind_param('diiiiiss', $amount, $cash, $click, $cashIn, $cashOut, $xarajat, $comment, $date);
 
 if ($stmt->execute()) {
-    $_SESSION['flash_message'] = ucfirst($transactionType) . ' saved successfully!';
+    $newId = $stmt->insert_id;
+    if ($transactionType === 'expense') {
+        if ($categoryId > 0) {
+            $linkStmt = $conn->prepare('REPLACE INTO transaction_categories (transaction_id, category_id) VALUES (?, ?)');
+            if ($linkStmt) {
+                $linkStmt->bind_param('ii', $newId, $categoryId);
+                $linkStmt->execute();
+                $linkStmt->close();
+            }
+        }
+    }
+    $_SESSION['flash_message'] = $transactionType === 'income' ? 'Daromad muvaffaqiyatli saqlandi!' : 'Xarajat muvaffaqiyatli saqlandi!';
     $_SESSION['flash_type'] = 'success';
     unset($_SESSION['form_values']);
 } else {
-    $_SESSION['flash_message'] = 'Failed to save the transaction: ' . $stmt->error;
+    $_SESSION['flash_message'] = 'Tranzaksiyani saqlashda xatolik: ' . $stmt->error;
     $_SESSION['flash_type'] = 'danger';
 }
 
