@@ -149,6 +149,10 @@ if (!$totals) {
 $balance = $totals['total_income'] - $totals['total_expense'];
 $monthlyBalance = $totals['monthly_income'] - $totals['monthly_expense'];
 
+$now = new DateTime();
+$currentDateLabel = $now->format('d.m.Y');
+$currentTimeLabel = $now->format('H:i');
+
 $incomeRecords = [];
 $incomeTotals = [
     'total' => 0.0,
@@ -351,21 +355,25 @@ $conn->close();
 
 $allowedTabs = ['overview', 'income', 'expense', 'reports', 'categories'];
 $activeTab = 'overview';
+$explicitTab = null;
 if (isset($_GET['tab']) && in_array($_GET['tab'], $allowedTabs, true)) {
-    $activeTab = $_GET['tab'];
+    $explicitTab = $_GET['tab'];
+    $activeTab = $explicitTab;
 } elseif (isset($_SESSION['active_tab']) && in_array($_SESSION['active_tab'], $allowedTabs, true)) {
     $activeTab = $_SESSION['active_tab'];
 }
 unset($_SESSION['active_tab']);
 
-if (!empty(array_intersect(array_keys($_GET), ['start_date', 'end_date']))) {
-    $activeTab = 'reports';
-}
-if (!empty(array_intersect(array_keys($_GET), ['income_start', 'income_end']))) {
-    $activeTab = 'income';
-}
-if (!empty(array_intersect(array_keys($_GET), ['expense_start', 'expense_end', 'expense_category']))) {
-    $activeTab = 'expense';
+if ($explicitTab === null) {
+    if (!empty(array_intersect(array_keys($_GET), ['start_date', 'end_date']))) {
+        $activeTab = 'reports';
+    }
+    if (!empty(array_intersect(array_keys($_GET), ['income_start', 'income_end']))) {
+        $activeTab = 'income';
+    }
+    if (!empty(array_intersect(array_keys($_GET), ['expense_start', 'expense_end', 'expense_category']))) {
+        $activeTab = 'expense';
+    }
 }
 
 $preservedForm = $_SESSION['form_values'] ?? null;
@@ -441,7 +449,42 @@ function uzs(float $value): string
 </head>
 <body class="min-h-screen bg-gradient-to-b from-primary-50 via-white to-white text-slate-900">
     <div class="absolute inset-x-0 top-0 -z-10 h-40 bg-gradient-to-b from-white/0 via-white/60 to-white"></div>
-    <div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <header class="sticky top-0 z-30 border-b border-white/60 bg-white/80 backdrop-blur">
+        <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex items-center gap-3">
+                    <span class="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-accent-500 text-lg font-semibold text-white shadow-lg shadow-primary-500/40">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" class="h-6 w-6">
+                            <path fill="currentColor" d="M4.75 4A1.75 1.75 0 0 0 3 5.75v12.5A1.75 1.75 0 0 0 4.75 20h6.5A1.75 1.75 0 0 0 13 18.25V14h6.25A1.75 1.75 0 0 0 21 12.25v-4.5A1.75 1.75 0 0 0 19.25 6H13V5.75A1.75 1.75 0 0 0 11.25 4h-6.5Zm0 1.5h6.5a.25.25 0 0 1 .25.25v12.5a.25.25 0 0 1-.25.25h-6.5a.25.25 0 0 1-.25-.25V5.75a.25.25 0 0 1 .25-.25Zm8 1.5H19.25a.25.25 0 0 1 .25.25v4.5a.25.25 0 0 1-.25.25H12.75V7Z" />
+                        </svg>
+                    </span>
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-[0.32em] text-primary-500">Naqd oqim</p>
+                        <h1 class="text-xl font-semibold text-slate-900 sm:text-2xl">Moliyaviy panel</h1>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-3 text-xs sm:text-sm">
+                    <div class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50/80 px-3 py-1.5 font-semibold text-emerald-700 shadow-sm shadow-emerald-100/80">
+                        <span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
+                        <span>Balans: <?= uzs((float) $balance) ?></span>
+                    </div>
+                    <div class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-slate-600 shadow-sm">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" class="h-4 w-4 text-primary-500">
+                            <path fill="currentColor" d="M12 2a10 10 0 1 0 10 10A10.011 10.011 0 0 0 12 2Zm0 18.25A8.25 8.25 0 1 1 20.25 12 8.259 8.259 0 0 1 12 20.25Zm.75-13a.75.75 0 0 0-1.5 0v5a.75.75 0 0 0 .336.625l3 2a.75.75 0 1 0 .828-1.25L12.75 11.7Z" />
+                        </svg>
+                        <span>Yangilanish: <?= htmlspecialchars($currentTimeLabel, ENT_QUOTES) ?></span>
+                    </div>
+                    <div class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-slate-600 shadow-sm">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" class="h-4 w-4 text-primary-500">
+                            <path fill="currentColor" d="M7 2.75a.75.75 0 0 0-1.5 0V4H4.75A1.75 1.75 0 0 0 3 5.75v12.5A1.75 1.75 0 0 0 4.75 20h14.5A1.75 1.75 0 0 0 21 18.25V5.75A1.75 1.75 0 0 0 19.25 4H18.5V2.75a.75.75 0 0 0-1.5 0V4H7Zm12.25 4v11.5a.25.25 0 0 1-.25.25H4.75a.25.25 0 0 1-.25-.25V6.75a.25.25 0 0 1 .25-.25h14.5a.25.25 0 0 1 .25.25ZM8 9.25A.75.75 0 0 1 8.75 8.5h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 8 9.25Zm0 3a.75.75 0 0 1 .75-.75h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 8 12.25Zm0 3a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 8 15.25Z" />
+                        </svg>
+                        <span>Bugun: <?= htmlspecialchars($currentDateLabel, ENT_QUOTES) ?></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+    <main class="mx-auto max-w-7xl px-4 pb-16 pt-10 sm:px-6 lg:px-8">
 
         <?php if ($flashMessage): ?>
             <?php
@@ -477,7 +520,7 @@ function uzs(float $value): string
             </div>
         <?php endif; ?>
 
-        <nav class="mt-6 flex flex-wrap items-center gap-2 rounded-2xl border border-white/60 bg-white/70 p-2 shadow-sm shadow-slate-200/60 backdrop-blur">
+        <nav class="mt-5 flex flex-wrap items-center gap-2 rounded-2xl border border-white/70 bg-white/80 p-2 shadow-sm shadow-slate-200/70 backdrop-blur">
             <?php
             $tabs = [
                 'overview' => 'Umumiy',
@@ -952,7 +995,7 @@ function uzs(float $value): string
                 </div>
             </div>
         </section>
-    </div>
+    </main>
 
     <div id="incomeModal" class="modal fixed inset-0 z-40 hidden items-center justify-center bg-slate-900/40 px-4 py-8">
         <div class="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
@@ -1062,24 +1105,24 @@ function uzs(float $value): string
 
     <script>
         const tabButtons = document.querySelectorAll('[data-tab-target]');
-        const tabPanels = document.querySelectorAll('[data-tab-panel]');
+        const filterMap = {
+            reports: ['start_date', 'end_date'],
+            income: ['income_start', 'income_end'],
+            expense: ['expense_start', 'expense_end', 'expense_category'],
+        };
+        const allFilterKeys = Array.from(new Set(Object.values(filterMap).flat()));
         tabButtons.forEach((button) => {
             button.addEventListener('click', () => {
                 const target = button.getAttribute('data-tab-target');
                 const url = new URL(window.location);
                 url.searchParams.set('tab', target);
-                if (['reports', 'income', 'expense'].includes(target)) {
-                    // keep existing filters in query string
-                } else {
-                    url.searchParams.delete('start_date');
-                    url.searchParams.delete('end_date');
-                    url.searchParams.delete('income_start');
-                    url.searchParams.delete('income_end');
-                    url.searchParams.delete('expense_start');
-                    url.searchParams.delete('expense_end');
-                    url.searchParams.delete('expense_category');
-                }
-                window.location = url.toString();
+                const allowedFilters = new Set(filterMap[target] ?? []);
+                allFilterKeys.forEach((key) => {
+                    if (!allowedFilters.has(key)) {
+                        url.searchParams.delete(key);
+                    }
+                });
+                window.location.href = url.toString();
             });
         });
 
