@@ -10,6 +10,68 @@ date_default_timezone_set('Asia/Tashkent');
 
 require_once '../db.php';
 
+$filterWarnings = [];
+
+$defaultStartDate = (new DateTime('first day of -11 months'))->format('Y-m-d');
+$defaultEndDate = date('Y-m-d');
+
+$rawStart = $_GET['start_date'] ?? $defaultStartDate;
+$rawEnd = $_GET['end_date'] ?? $defaultEndDate;
+
+$startDateTime = DateTime::createFromFormat('Y-m-d', $rawStart) ?: null;
+if (!$startDateTime) {
+    $filterWarnings[] = 'The start date was invalid, so the default range has been applied.';
+    $startDateTime = new DateTime($defaultStartDate);
+    $rawStart = $startDateTime->format('Y-m-d');
+}
+
+$endDateTime = DateTime::createFromFormat('Y-m-d', $rawEnd) ?: null;
+if (!$endDateTime) {
+    $filterWarnings[] = 'The end date was invalid, so today is used instead.';
+    $endDateTime = new DateTime($defaultEndDate);
+    $rawEnd = $endDateTime->format('Y-m-d');
+}
+
+if ($startDateTime > $endDateTime) {
+    $filterWarnings[] = 'The start date was later than the end date, so the values were swapped.';
+    [$startDateTime, $endDateTime] = [$endDateTime, $startDateTime];
+    $rawStart = $startDateTime->format('Y-m-d');
+    $rawEnd = $endDateTime->format('Y-m-d');
+}
+
+$reportStart = $startDateTime->format('Y-m-d');
+$reportEnd = $endDateTime->format('Y-m-d');
+$reportRangeLabel = $startDateTime->format('M j, Y') . ' – ' . $endDateTime->format('M j, Y');
+if ($startDateTime->format('Y-m-d') === $endDateTime->format('Y-m-d')) {
+    $reportRangeLabel = $startDateTime->format('M j, Y');
+}
+
+$reportStartInput = $rawStart;
+$reportEndInput = $rawEnd;
+
+$quickRanges = [
+    [
+        'label' => 'This Month',
+        'start' => date('Y-m-01'),
+        'end' => date('Y-m-d'),
+    ],
+    [
+        'label' => 'Last 3 Months',
+        'start' => (new DateTime('first day of -2 months'))->format('Y-m-01'),
+        'end' => date('Y-m-d'),
+    ],
+    [
+        'label' => 'Year to Date',
+        'start' => date('Y-01-01'),
+        'end' => date('Y-m-d'),
+    ],
+    [
+        'label' => 'Last 12 Months',
+        'start' => (new DateTime('first day of -11 months'))->format('Y-m-01'),
+        'end' => date('Y-m-d'),
+    ],
+];
+
 $dbErrors = [];
 
 // Fetch aggregated totals
@@ -98,33 +160,118 @@ if ($expenseResult instanceof mysqli_result) {
     $dbErrors[] = 'Expense records could not be retrieved.';
 }
 
-// Fetch monthly report data for the chart
+// Fetch monthly report data for the selected range
 $reportSql = "SELECT DATE_FORMAT(date, '%Y-%m') AS period,
         COALESCE(SUM(CASE WHEN cash_in = 1 THEN payment END), 0) AS income,
         COALESCE(SUM(CASE WHEN cash_out = 1 THEN payment END), 0) AS expense
     FROM transactions
-    WHERE date >= DATE_SUB(CURDATE(), INTERVAL 11 MONTH)
+    WHERE date BETWEEN ? AND ?
     GROUP BY period
     ORDER BY period";
 
 $reportLabels = [];
 $reportIncome = [];
 $reportExpense = [];
+$reportBalance = [];
 $reportTable = [];
 
-$reportResult = $conn->query($reportSql);
-if ($reportResult instanceof mysqli_result) {
-    while ($row = $reportResult->fetch_assoc()) {
-        $label = $row['period'];
-        $reportLabels[] = $label;
-        $reportIncome[] = (float) $row['income'];
-        $reportExpense[] = (float) $row['expense'];
-        $reportTable[] = $row;
+$monthlyMap = [];
+$reportStmt = $conn->prepare($reportSql);
+if ($reportStmt) {
+    $reportStmt->bind_param('ss', $reportStart, $reportEnd);
+    if ($reportStmt->execute()) {
+        $result = $reportStmt->get_result();
+        if ($result instanceof mysqli_result) {
+            while ($row = $result->fetch_assoc()) {
+                $monthlyMap[$row['period']] = [
+                    'income' => (float) $row['income'],
+                    'expense' => (float) $row['expense'],
+                ];
+            }
+            $result->free();
+        }
+    } else {
+        $dbErrors[] = 'Report data could not be generated: ' . $reportStmt->error;
     }
-    $reportResult->free();
+    $reportStmt->close();
 } else {
-    $dbErrors[] = 'Report data could not be generated.';
+    $dbErrors[] = 'Unable to prepare report query: ' . $conn->error;
 }
+
+$periodStart = (new DateTime($reportStart))->modify('first day of this month');
+$periodEnd = (new DateTime($reportEnd))->modify('first day of next month');
+
+for ($cursor = clone $periodStart; $cursor < $periodEnd; $cursor->modify('+1 month')) {
+    $periodKey = $cursor->format('Y-m');
+    $chartLabel = $cursor->format('M Y');
+    $tableLabel = $cursor->format('F Y');
+
+    $incomeValue = $monthlyMap[$periodKey]['income'] ?? 0.0;
+    $expenseValue = $monthlyMap[$periodKey]['expense'] ?? 0.0;
+    $balanceValue = $incomeValue - $expenseValue;
+
+    $reportLabels[] = $chartLabel;
+    $reportIncome[] = $incomeValue;
+    $reportExpense[] = $expenseValue;
+    $reportBalance[] = $balanceValue;
+
+    $reportTable[] = [
+        'label' => $tableLabel,
+        'income' => $incomeValue,
+        'expense' => $expenseValue,
+        'balance' => $balanceValue,
+    ];
+}
+
+// Fetch range summary totals for cards and doughnut charts
+$rangeSummary = [
+    'income' => 0.0,
+    'expense' => 0.0,
+    'balance' => 0.0,
+    'income_cash' => 0.0,
+    'income_click' => 0.0,
+    'expense_cash' => 0.0,
+    'expense_click' => 0.0,
+];
+
+$summarySql = "SELECT
+        COALESCE(SUM(CASE WHEN cash_in = 1 THEN payment END), 0) AS income,
+        COALESCE(SUM(CASE WHEN cash_out = 1 THEN payment END), 0) AS expense,
+        COALESCE(SUM(CASE WHEN cash_in = 1 AND cash = 1 THEN payment END), 0) AS income_cash,
+        COALESCE(SUM(CASE WHEN cash_in = 1 AND click = 1 THEN payment END), 0) AS income_click,
+        COALESCE(SUM(CASE WHEN cash_out = 1 AND cash = 1 THEN payment END), 0) AS expense_cash,
+        COALESCE(SUM(CASE WHEN cash_out = 1 AND click = 1 THEN payment END), 0) AS expense_click
+    FROM transactions
+    WHERE date BETWEEN ? AND ?";
+
+$summaryStmt = $conn->prepare($summarySql);
+if ($summaryStmt) {
+    $summaryStmt->bind_param('ss', $reportStart, $reportEnd);
+    if ($summaryStmt->execute()) {
+        $summaryResult = $summaryStmt->get_result();
+        if ($summaryResult instanceof mysqli_result) {
+            $rangeSummary = array_merge($rangeSummary, array_map('floatval', $summaryResult->fetch_assoc() ?: []));
+            $summaryResult->free();
+        }
+    } else {
+        $dbErrors[] = 'Unable to calculate the selected range summary: ' . $summaryStmt->error;
+    }
+    $summaryStmt->close();
+} else {
+    $dbErrors[] = 'Unable to prepare the summary query: ' . $conn->error;
+}
+
+$rangeSummary['balance'] = $rangeSummary['income'] - $rangeSummary['expense'];
+
+$incomeMethodData = [
+    (float) $rangeSummary['income_cash'],
+    (float) $rangeSummary['income_click'],
+];
+
+$expenseMethodData = [
+    (float) $rangeSummary['expense_cash'],
+    (float) $rangeSummary['expense_click'],
+];
 
 $conn->close();
 
@@ -135,6 +282,10 @@ $activeTab = in_array($queryTab, $allowedTabs, true)
     ? $queryTab
     : (in_array($sessionActiveTab, $allowedTabs, true) ? $sessionActiveTab : 'overview');
 unset($_SESSION['active_tab']);
+
+if (isset($_GET['start_date']) || isset($_GET['end_date'])) {
+    $activeTab = 'reports';
+}
 
 $preservedForm = $_SESSION['form_values'] ?? null;
 unset($_SESSION['form_values']);
@@ -170,51 +321,191 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cashflow Manager</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
     <style>
+        :root {
+            --gradient-start: #111827;
+            --gradient-end: #0b1120;
+            --accent: #6366f1;
+            --accent-soft: rgba(99, 102, 241, 0.1);
+            --glass-bg: rgba(255, 255, 255, 0.9);
+            --glass-border: rgba(255, 255, 255, 0.35);
+            --text-muted: #6b7280;
+        }
+
         body {
-            background-color: #f5f6fa;
+            min-height: 100vh;
+            margin: 0;
+            background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.22), transparent 45%),
+                        radial-gradient(circle at top right, rgba(99, 102, 241, 0.18), transparent 50%),
+                        linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            color: #111827;
         }
-        .card h5 {
-            font-size: 1.1rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05rem;
+
+        header {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.92), rgba(14, 165, 233, 0.85));
+            box-shadow: 0 20px 45px -28px rgba(15, 23, 42, 0.9);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.25);
         }
-        .balance-positive {
-            color: #28a745;
+
+        header .btn {
+            border-radius: 999px;
+            padding-inline: 1.5rem;
+            font-weight: 600;
         }
-        .balance-negative {
-            color: #dc3545;
+
+        .app-shell {
+            margin-top: -3rem;
         }
+
+        .nav-pills .nav-link {
+            border-radius: 999px;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+            color: #1f2937;
+            background-color: rgba(255, 255, 255, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            transition: transform 0.25s ease, box-shadow 0.25s ease;
+        }
+
+        .nav-pills .nav-link.active {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(14, 165, 233, 0.95));
+            color: #fff;
+            box-shadow: 0 10px 25px -15px rgba(99, 102, 241, 0.75);
+            transform: translateY(-2px);
+        }
+
+        .glass-card,
         .form-section {
-            background: #ffffff;
-            border-radius: 1rem;
-            padding: 1.5rem;
-            box-shadow: 0 10px 30px rgba(31, 38, 135, 0.1);
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 1.5rem;
+            box-shadow: 0 22px 45px -28px rgba(15, 23, 42, 0.55);
+            backdrop-filter: saturate(160%) blur(18px);
         }
+
+        .card {
+            border: none;
+            border-radius: 1.5rem;
+            overflow: hidden;
+        }
+
+        .card h5,
+        .card-header {
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+        }
+
+        .balance-positive {
+            color: #16a34a;
+        }
+
+        .balance-negative {
+            color: #dc2626;
+        }
+
+        .form-section {
+            padding: 2rem;
+        }
+
         .tab-content {
-            margin-top: 1.5rem;
+            margin-top: 2rem;
         }
+
         .chart-container {
             position: relative;
             height: 320px;
         }
+
+        @media (min-width: 992px) {
+            .chart-container--wide {
+                height: 380px;
+            }
+        }
+
+        .text-muted-soft {
+            color: var(--text-muted);
+        }
+
+        .reports-summary .stat-card {
+            border-radius: 1.5rem;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(248, 250, 252, 0.85));
+            box-shadow: 0 18px 45px -32px rgba(15, 23, 42, 0.7);
+        }
+
+        .reports-summary .icon-badge {
+            width: 3rem;
+            height: 3rem;
+            border-radius: 999px;
+            display: grid;
+            place-items: center;
+            background: var(--accent-soft);
+            color: var(--accent);
+            font-size: 1.25rem;
+        }
+
+        .reports-filter {
+            border-radius: 1.5rem;
+            background: rgba(15, 23, 42, 0.04);
+        }
+
+        .table thead th {
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .table tbody td {
+            vertical-align: middle;
+        }
+
+        .badge-soft {
+            background: rgba(99, 102, 241, 0.12);
+            color: #4338ca;
+            border-radius: 999px;
+            font-weight: 600;
+        }
+
+        .small-caps {
+            font-size: 0.75rem;
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .quick-range button {
+            border-radius: 999px;
+            font-size: 0.85rem;
+        }
+
+        .text-white-75 {
+            color: rgba(255, 255, 255, 0.75) !important;
+        }
+
+        .glass-card .list-group-item {
+            background-color: transparent;
+        }
     </style>
 </head>
 <body>
-<header class="bg-dark text-white">
-    <div class="container py-3 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
-        <div>
-            <h1 class="h3 mb-0">Cashflow App</h1>
-            <p class="mb-0 small text-white-50">Track daily income and expenses with ease</p>
+<header class="text-white">
+    <div class="container py-4 py-md-5 d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-4">
+        <div class="d-flex flex-column gap-2">
+            <span class="small-caps text-white-50">Finance cockpit</span>
+            <h1 class="display-6 mb-0 fw-semibold">Cashflow Intelligence Hub</h1>
+            <p class="mb-0 text-white-75">Monitor real-time balances, capture new activity, and visualise payment trends with confidence.</p>
         </div>
-        <div class="d-flex gap-2">
-            <a class="btn btn-outline-light" href="../index.php">Back to Dashboard</a>
+        <div class="d-flex gap-3">
+            <a class="btn btn-light btn-lg shadow-sm" href="../index.php"><i class="bi bi-arrow-left-circle me-2"></i>Back to dashboard</a>
         </div>
     </div>
 </header>
 
-<div class="container py-4">
+<div class="container py-5 app-shell">
     <ul class="nav nav-pills flex-column flex-md-row gap-2 justify-content-center" id="cashflowTabs" role="tablist">
         <li class="nav-item flex-fill" role="presentation">
             <button class="nav-link w-100 <?= $activeTab === 'overview' ? 'active' : '' ?>" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab" aria-controls="overview" aria-selected="<?= $activeTab === 'overview' ? 'true' : 'false' ?>">
@@ -340,7 +631,7 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
 
             <div class="row g-3 mt-2">
                 <div class="col-lg-6">
-                    <div class="card h-100">
+                    <div class="card glass-card h-100 border-0">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <span>Recent Income</span>
                             <span class="badge text-bg-success">Last 10</span>
@@ -378,7 +669,7 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
                     </div>
                 </div>
                 <div class="col-lg-6">
-                    <div class="card h-100">
+                    <div class="card glass-card h-100 border-0">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <span>Recent Expenses</span>
                             <span class="badge text-bg-danger">Last 10</span>
@@ -455,7 +746,7 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
                     </div>
                 </div>
                 <div class="col-lg-6">
-                    <div class="card">
+                    <div class="card glass-card border-0">
                         <div class="card-header">Income Overview</div>
                         <div class="card-body">
                             <p class="mb-2">Total Income: <strong><?= number_format((float) $totals['total_income'], 2) ?></strong></p>
@@ -522,7 +813,7 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
                     </div>
                 </div>
                 <div class="col-lg-6">
-                    <div class="card">
+                    <div class="card glass-card border-0">
                         <div class="card-header">Expense Overview</div>
                         <div class="card-body">
                             <p class="mb-2">Total Expense: <strong><?= number_format((float) $totals['total_expense'], 2) ?></strong></p>
@@ -553,48 +844,177 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
         </div>
 
         <div class="tab-pane fade <?= $activeTab === 'reports' ? 'show active' : '' ?>" id="reports" role="tabpanel" aria-labelledby="reports-tab">
-            <div class="card mb-4">
-                <div class="card-header">Income vs Expense (Last 12 Months)</div>
-                <div class="card-body">
-                    <div class="chart-container">
-                        <canvas id="incomeExpenseChart"></canvas>
+            <div class="glass-card p-4 p-lg-5 mb-4">
+                <div class="d-flex flex-column flex-xl-row justify-content-between align-items-xl-end gap-4">
+                    <div>
+                        <h2 class="h5 fw-semibold mb-2">Dynamic financial reports</h2>
+                        <p class="mb-0 text-muted-soft">Review income and expenses between <strong><?= htmlspecialchars($reportRangeLabel) ?></strong>.</p>
+                    </div>
+                    <form id="reportsFilterForm" class="row g-3 align-items-end reports-filter p-3 p-lg-4" method="get">
+                        <input type="hidden" name="tab" value="reports">
+                        <div class="col-md-4">
+                            <label for="reportStart" class="form-label">Start date</label>
+                            <input type="date" class="form-control" id="reportStart" name="start_date" value="<?= htmlspecialchars($reportStartInput) ?>" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="reportEnd" class="form-label">End date</label>
+                            <input type="date" class="form-control" id="reportEnd" name="end_date" value="<?= htmlspecialchars($reportEndInput) ?>" required>
+                        </div>
+                        <div class="col-md-4 col-xl-3">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-arrow-repeat me-2"></i>Update report
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                <?php if ($filterWarnings): ?>
+                    <div class="alert alert-warning mt-3 mb-0" role="alert">
+                        <h3 class="h6 mb-2">We adjusted your filter</h3>
+                        <ul class="mb-0 ps-3">
+                            <?php foreach ($filterWarnings as $warning): ?>
+                                <li><?= htmlspecialchars($warning) ?></li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
+                <?php endif; ?>
+                <div class="quick-range d-flex flex-wrap gap-2 mt-4">
+                    <?php foreach ($quickRanges as $range): ?>
+                        <button type="button" class="btn btn-outline-primary btn-sm" data-range-start="<?= htmlspecialchars($range['start']) ?>" data-range-end="<?= htmlspecialchars($range['end']) ?>">
+                            <?= htmlspecialchars($range['label']) ?>
+                        </button>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+
+            <div class="row g-4 reports-summary mb-4">
+                <div class="col-md-4">
+                    <div class="stat-card p-4 h-100">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="icon-badge">
+                                <i class="bi bi-graph-up"></i>
+                            </div>
+                            <div>
+                                <p class="small-caps mb-1">Income</p>
+                                <h3 class="h4 mb-0"><?= number_format((float) $rangeSummary['income'], 2) ?></h3>
+                                <small class="text-muted-soft">Captured in the selected period</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stat-card p-4 h-100">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="icon-badge">
+                                <i class="bi bi-cash-coin"></i>
+                            </div>
+                            <div>
+                                <p class="small-caps mb-1">Expense</p>
+                                <h3 class="h4 mb-0"><?= number_format((float) $rangeSummary['expense'], 2) ?></h3>
+                                <small class="text-muted-soft">Money out within the range</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stat-card p-4 h-100">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="icon-badge">
+                                <i class="bi bi-piggy-bank"></i>
+                            </div>
+                            <div>
+                                <p class="small-caps mb-1">Net balance</p>
+                                <h3 class="h4 mb-0 <?= $rangeSummary['balance'] >= 0 ? 'text-success' : 'text-danger' ?>"><?= number_format((float) $rangeSummary['balance'], 2) ?></h3>
+                                <small class="text-muted-soft">Income minus expense</small>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="card">
-                <div class="card-header">Monthly Breakdown</div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table mb-0">
-                            <thead class="table-light">
-                            <tr>
-                                <th>Period</th>
-                                <th>Income</th>
-                                <th>Expense</th>
-                                <th>Balance</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            <?php if ($reportTable): ?>
-                                <?php foreach ($reportTable as $row): ?>
-                                    <?php $rowBalance = $row['income'] - $row['expense']; ?>
-                                    <tr>
-                                        <td><?= htmlspecialchars($row['period']) ?></td>
-                                        <td><?= number_format((float) $row['income'], 2) ?></td>
-                                        <td><?= number_format((float) $row['expense'], 2) ?></td>
-                                        <td class="<?= $rowBalance >= 0 ? 'text-success' : 'text-danger' ?>">
-                                            <?= number_format((float) $rowBalance, 2) ?>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                                <tr>
-                                    <td colspan="4" class="text-center py-3">Not enough data to generate a report.</td>
-                                </tr>
-                            <?php endif; ?>
-                            </tbody>
-                        </table>
+
+            <div class="row g-4">
+                <div class="col-lg-8">
+                    <div class="glass-card p-4 h-100">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h3 class="h6 mb-0 fw-semibold"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Income vs Expense</h3>
+                            <span class="badge badge-soft"><?= htmlspecialchars($reportRangeLabel) ?></span>
+                        </div>
+                        <div class="chart-container chart-container--wide">
+                            <canvas id="incomeExpenseChart"></canvas>
+                        </div>
                     </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="glass-card p-4 mb-4">
+                        <div class="d-flex align-items-center mb-3">
+                            <i class="bi bi-activity text-primary me-2"></i>
+                            <h3 class="h6 mb-0 fw-semibold">Monthly balance trend</h3>
+                        </div>
+                        <div class="chart-container" style="height: 260px;">
+                            <canvas id="balanceTrendChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="glass-card p-4">
+                        <div class="d-flex align-items-center mb-3">
+                            <i class="bi bi-wallet2 text-primary me-2"></i>
+                            <h3 class="h6 mb-0 fw-semibold">Payment methods split</h3>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-6">
+                                <div class="text-center">
+                                    <span class="small-caps d-block mb-2">Income</span>
+                                    <div class="chart-container" style="height: 180px;">
+                                        <canvas id="incomeMethodChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="text-center">
+                                    <span class="small-caps d-block mb-2">Expense</span>
+                                    <div class="chart-container" style="height: 180px;">
+                                        <canvas id="expenseMethodChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass-card p-4 p-lg-5 mt-4">
+                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-calendar3 text-primary"></i>
+                        <h3 class="h6 mb-0 fw-semibold">Monthly breakdown</h3>
+                    </div>
+                    <span class="text-muted-soft small">Values reflect actual activity within each month of the selected period.</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead class="table-light">
+                        <tr>
+                            <th scope="col">Period</th>
+                            <th scope="col" class="text-end">Income</th>
+                            <th scope="col" class="text-end">Expense</th>
+                            <th scope="col" class="text-end">Balance</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php if ($reportTable): ?>
+                            <?php foreach ($reportTable as $row): ?>
+                                <tr>
+                                    <td><?= htmlspecialchars($row['label']) ?></td>
+                                    <td class="text-end"><?= number_format((float) $row['income'], 2) ?></td>
+                                    <td class="text-end"><?= number_format((float) $row['expense'], 2) ?></td>
+                                    <td class="text-end <?= $row['balance'] >= 0 ? 'text-success' : 'text-danger' ?>"><?= number_format((float) $row['balance'], 2) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <tr>
+                                <td colspan="4" class="text-center py-3">Not enough data to generate a report.</td>
+                            </tr>
+                        <?php endif; ?>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -630,22 +1050,59 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
             });
         });
 
-        const ctx = document.getElementById('incomeExpenseChart');
-        if (ctx) {
-            const chart = new Chart(ctx, {
+        const reportLabels = <?= json_encode($reportLabels) ?>;
+        const reportIncome = <?= json_encode($reportIncome) ?>;
+        const reportExpense = <?= json_encode($reportExpense) ?>;
+        const reportBalance = <?= json_encode($reportBalance) ?>;
+        const incomeMethodData = <?= json_encode($incomeMethodData) ?>;
+        const expenseMethodData = <?= json_encode($expenseMethodData) ?>;
+
+        const reportsForm = document.getElementById('reportsFilterForm');
+        const quickRangeButtons = document.querySelectorAll('.quick-range button[data-range-start]');
+        if (reportsForm) {
+            const startInput = reportsForm.querySelector('input[name="start_date"]');
+            const endInput = reportsForm.querySelector('input[name="end_date"]');
+            quickRangeButtons.forEach(function (button) {
+                button.addEventListener('click', function () {
+                    if (startInput && endInput) {
+                        const startValue = button.getAttribute('data-range-start');
+                        const endValue = button.getAttribute('data-range-end');
+                        if (startValue) {
+                            startInput.value = startValue;
+                        }
+                        if (endValue) {
+                            endInput.value = endValue;
+                        }
+                        if (typeof reportsForm.requestSubmit === 'function') {
+                            reportsForm.requestSubmit();
+                        } else {
+                            reportsForm.submit();
+                        }
+                    }
+                });
+            });
+        }
+
+        const incomeExpenseCanvas = document.getElementById('incomeExpenseChart');
+        if (incomeExpenseCanvas && reportLabels.length) {
+            new Chart(incomeExpenseCanvas, {
                 type: 'bar',
                 data: {
-                    labels: <?= json_encode($reportLabels) ?>,
+                    labels: reportLabels,
                     datasets: [
                         {
                             label: 'Income',
-                            data: <?= json_encode($reportIncome) ?>,
-                            backgroundColor: 'rgba(25, 135, 84, 0.7)'
+                            data: reportIncome,
+                            backgroundColor: 'rgba(34, 197, 94, 0.75)',
+                            borderRadius: 12,
+                            borderSkipped: false,
                         },
                         {
                             label: 'Expense',
-                            data: <?= json_encode($reportExpense) ?>,
-                            backgroundColor: 'rgba(220, 53, 69, 0.7)'
+                            data: reportExpense,
+                            backgroundColor: 'rgba(239, 68, 68, 0.75)',
+                            borderRadius: 12,
+                            borderSkipped: false,
                         }
                     ]
                 },
@@ -653,10 +1110,15 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        },
                         y: {
                             beginAtZero: true,
                             ticks: {
-                                callback: function(value) {
+                                callback: function (value) {
                                     return new Intl.NumberFormat('en-US', {
                                         style: 'currency',
                                         currency: 'UZS',
@@ -664,6 +1126,114 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
                                     }).format(value);
                                 }
                             }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        const balanceTrendCanvas = document.getElementById('balanceTrendChart');
+        if (balanceTrendCanvas && reportLabels.length) {
+            new Chart(balanceTrendCanvas, {
+                type: 'line',
+                data: {
+                    labels: reportLabels,
+                    datasets: [
+                        {
+                            label: 'Net balance',
+                            data: reportBalance,
+                            fill: true,
+                            borderColor: 'rgba(99, 102, 241, 1)',
+                            backgroundColor: 'rgba(99, 102, 241, 0.2)',
+                            tension: 0.35,
+                            pointBackgroundColor: 'rgba(99, 102, 241, 1)',
+                            pointBorderWidth: 0,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            ticks: {
+                                callback: function (value) {
+                                    return new Intl.NumberFormat('en-US', {
+                                        style: 'currency',
+                                        currency: 'UZS',
+                                        maximumFractionDigits: 0
+                                    }).format(value);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        const incomeMethodCanvas = document.getElementById('incomeMethodChart');
+        if (incomeMethodCanvas) {
+            new Chart(incomeMethodCanvas, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Cash', 'Click'],
+                    datasets: [
+                        {
+                            data: incomeMethodData,
+                            backgroundColor: ['rgba(34, 197, 94, 0.8)', 'rgba(14, 165, 233, 0.8)'],
+                            borderWidth: 0,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        const expenseMethodCanvas = document.getElementById('expenseMethodChart');
+        if (expenseMethodCanvas) {
+            new Chart(expenseMethodCanvas, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Cash', 'Click'],
+                    datasets: [
+                        {
+                            data: expenseMethodData,
+                            backgroundColor: ['rgba(239, 68, 68, 0.85)', 'rgba(99, 102, 241, 0.85)'],
+                            borderWidth: 0,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
                         }
                     }
                 }
