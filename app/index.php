@@ -325,39 +325,114 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
     <style>
         :root {
-            --gradient-start: #111827;
-            --gradient-end: #0b1120;
-            --accent: #6366f1;
-            --accent-soft: rgba(99, 102, 241, 0.1);
-            --glass-bg: rgba(255, 255, 255, 0.9);
-            --glass-border: rgba(255, 255, 255, 0.35);
-            --text-muted: #6b7280;
+            --surface-muted: #f3f6ff;
+            --surface-highlight: #e0f2fe;
+            --surface-bright: #ffffff;
+            --accent: #4f46e5;
+            --accent-contrast: #0ea5e9;
+            --accent-soft: rgba(79, 70, 229, 0.12);
+            --glass-bg: rgba(255, 255, 255, 0.92);
+            --glass-border: rgba(148, 163, 184, 0.25);
+            --text-muted: #64748b;
+            --hero-shadow: rgba(15, 23, 42, 0.15);
         }
 
         body {
             min-height: 100vh;
             margin: 0;
-            background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.22), transparent 45%),
-                        radial-gradient(circle at top right, rgba(99, 102, 241, 0.18), transparent 50%),
-                        linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+            background:
+                radial-gradient(circle at 12% 18%, rgba(79, 70, 229, 0.12), transparent 55%),
+                radial-gradient(circle at 85% 12%, rgba(14, 165, 233, 0.14), transparent 50%),
+                linear-gradient(180deg, var(--surface-muted) 0%, var(--surface-bright) 100%);
             font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            color: #111827;
+            color: #0f172a;
         }
 
         header {
-            background: linear-gradient(135deg, rgba(99, 102, 241, 0.92), rgba(14, 165, 233, 0.85));
-            box-shadow: 0 20px 45px -28px rgba(15, 23, 42, 0.9);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.25);
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(224, 242, 254, 0.9));
+            box-shadow: 0 18px 42px -28px var(--hero-shadow);
+            border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+            color: #0f172a;
+        }
+
+        .hero-surface {
+            border-bottom-left-radius: clamp(1.5rem, 4vw, 3.25rem);
+            border-bottom-right-radius: clamp(1.5rem, 4vw, 3.25rem);
+        }
+
+        header::before,
+        header::after {
+            content: "";
+            position: absolute;
+            width: clamp(220px, 32vw, 360px);
+            height: clamp(220px, 32vw, 360px);
+            border-radius: 999px;
+            background: radial-gradient(circle, rgba(79, 70, 229, 0.16), transparent 65%);
+            z-index: 0;
+        }
+
+        header::before {
+            top: -40%;
+            right: -10%;
+        }
+
+        header::after {
+            bottom: -45%;
+            left: -15%;
+            background: radial-gradient(circle, rgba(14, 165, 233, 0.18), transparent 60%);
+        }
+
+        header .container-xxl {
+            position: relative;
+            z-index: 1;
         }
 
         header .btn {
             border-radius: 999px;
-            padding-inline: 1.5rem;
+            padding-inline: 1.25rem;
+            font-weight: 600;
+            backdrop-filter: saturate(160%) blur(6px);
+        }
+
+        .hero-title {
+            font-size: clamp(1.875rem, 1.2rem + 1.5vw, 2.75rem);
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        .hero-subtitle {
+            color: rgba(15, 23, 42, 0.68);
+            max-width: 38rem;
+        }
+
+        .eyebrow-label {
+            font-size: 0.75rem;
+            letter-spacing: 0.28em;
+            text-transform: uppercase;
+            color: rgba(15, 23, 42, 0.55);
             font-weight: 600;
         }
 
+        .btn-glass {
+            background: rgba(79, 70, 229, 0.08);
+            color: #1d4ed8;
+            border: 1px solid rgba(79, 70, 229, 0.18);
+            padding-block: 0.65rem;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+        }
+
+        .btn-glass:hover,
+        .btn-glass:focus {
+            background: rgba(79, 70, 229, 0.12);
+            box-shadow: 0 10px 20px -15px rgba(79, 70, 229, 0.6);
+            transform: translateY(-1px);
+            color: #1d4ed8;
+        }
+
         .app-shell {
-            margin-top: -3rem;
+            margin-top: -2.25rem;
         }
 
         .nav-pills .nav-link {
@@ -365,15 +440,20 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
             font-weight: 600;
             letter-spacing: 0.03em;
             color: #1f2937;
-            background-color: rgba(255, 255, 255, 0.7);
-            border: 1px solid rgba(255, 255, 255, 0.4);
-            transition: transform 0.25s ease, box-shadow 0.25s ease;
+            background-color: rgba(255, 255, 255, 0.85);
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+        }
+
+        .nav-pills .nav-link:hover {
+            background-color: rgba(255, 255, 255, 0.95);
+            box-shadow: 0 10px 25px -18px rgba(15, 23, 42, 0.35);
         }
 
         .nav-pills .nav-link.active {
-            background: linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(14, 165, 233, 0.95));
+            background: linear-gradient(135deg, rgba(79, 70, 229, 0.98), rgba(14, 165, 233, 0.92));
             color: #fff;
-            box-shadow: 0 10px 25px -15px rgba(99, 102, 241, 0.75);
+            box-shadow: 0 14px 28px -18px rgba(79, 70, 229, 0.55);
             transform: translateY(-2px);
         }
 
@@ -382,7 +462,7 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
             background: var(--glass-bg);
             border: 1px solid var(--glass-border);
             border-radius: 1.5rem;
-            box-shadow: 0 22px 45px -28px rgba(15, 23, 42, 0.55);
+            box-shadow: 0 25px 45px -30px rgba(15, 23, 42, 0.25);
             backdrop-filter: saturate(160%) blur(18px);
         }
 
@@ -450,7 +530,8 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
 
         .reports-filter {
             border-radius: 1.5rem;
-            background: rgba(15, 23, 42, 0.04);
+            background: rgba(148, 163, 184, 0.12);
+            border: 1px solid rgba(148, 163, 184, 0.2);
         }
 
         .table thead th {
@@ -482,25 +563,21 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
             font-size: 0.85rem;
         }
 
-        .text-white-75 {
-            color: rgba(255, 255, 255, 0.75) !important;
-        }
-
         .glass-card .list-group-item {
             background-color: transparent;
         }
     </style>
 </head>
 <body>
-<header class="text-white">
-    <div class="container py-4 py-md-5 d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-4">
+<header class="hero-surface">
+    <div class="container-xxl py-3 py-md-4 d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 gap-lg-4">
         <div class="d-flex flex-column gap-2">
-            <span class="small-caps text-white-50">Finance cockpit</span>
-            <h1 class="display-6 mb-0 fw-semibold">Cashflow Intelligence Hub</h1>
-            <p class="mb-0 text-white-75">Monitor real-time balances, capture new activity, and visualise payment trends with confidence.</p>
+            <span class="eyebrow-label">Finance cockpit</span>
+            <h1 class="hero-title mb-0">Cashflow Intelligence Hub</h1>
+            <p class="hero-subtitle mb-0">Monitor real-time balances, capture new activity, and visualise payment trends with confidence.</p>
         </div>
-        <div class="d-flex gap-3">
-            <a class="btn btn-light btn-lg shadow-sm" href="../index.php"><i class="bi bi-arrow-left-circle me-2"></i>Back to dashboard</a>
+        <div class="d-flex flex-wrap align-items-center justify-content-lg-end gap-2">
+            <a class="btn btn-glass shadow-sm" href="../index.php"><i class="bi bi-arrow-left-circle me-2"></i>Back to dashboard</a>
         </div>
     </div>
 </header>
