@@ -14,21 +14,33 @@ $filterWarnings = [];
 
 function normalize_range(?string $rawStart, ?string $rawEnd, string $defaultStart, string $defaultEnd, array &$warnings, string $label): array
 {
-    $start = DateTime::createFromFormat('Y-m-d', (string) $rawStart) ?: null;
-    $end = DateTime::createFromFormat('Y-m-d', (string) $rawEnd) ?: null;
+    $startInput = isset($rawStart) ? trim((string) $rawStart) : null;
+    $endInput = isset($rawEnd) ? trim((string) $rawEnd) : null;
+
+    $startProvided = $startInput !== null && $startInput !== '';
+    $endProvided = $endInput !== null && $endInput !== '';
+
+    $start = $startProvided ? DateTime::createFromFormat('Y-m-d', $startInput) ?: null : null;
+    $end = $endProvided ? DateTime::createFromFormat('Y-m-d', $endInput) ?: null : null;
 
     if (!$start) {
         $start = new DateTime($defaultStart);
-        $warnings[] = $label . ' uchun boshlanish sanasi noto\'g\'ri. Standart sana qo\'llandi.';
+        if ($startProvided) {
+            $warnings[] = $label . ' uchun boshlanish sanasi noto\'g\'ri. Standart sana qo\'llandi.';
+        }
     }
     if (!$end) {
         $end = new DateTime($defaultEnd);
-        $warnings[] = $label . ' uchun tugash sanasi noto\'g\'ri. Standart sana qo\'llandi.';
+        if ($endProvided) {
+            $warnings[] = $label . ' uchun tugash sanasi noto\'g\'ri. Standart sana qo\'llandi.';
+        }
     }
 
     if ($start > $end) {
         [$start, $end] = [$end, $start];
-        $warnings[] = $label . ' uchun sanalar almashtirildi, chunki boshlanish sanasi keyinroq edi.';
+        if ($startProvided || $endProvided) {
+            $warnings[] = $label . ' uchun sanalar almashtirildi, chunki boshlanish sanasi keyinroq edi.';
+        }
     }
 
     return [
@@ -428,21 +440,13 @@ function uzs(float $value): string
     </style>
 </head>
 <body class="min-h-screen bg-gradient-to-b from-primary-50 via-white to-white text-slate-900">
-    <div class="absolute inset-x-0 top-0 -z-10 h-60 bg-gradient-to-b from-white/0 via-white/70 to-white"></div>
+    <div class="absolute inset-x-0 top-0 -z-10 h-40 bg-gradient-to-b from-white/0 via-white/60 to-white"></div>
     <div class="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-        <header class="flex flex-col gap-6 rounded-3xl border border-white/70 bg-white/80 p-6 shadow-lg shadow-primary-100/60 backdrop-blur-lg md:flex-row md:items-center md:justify-between">
-            <div class="space-y-2">
-                <p class="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">Moliyaviy boshqaruv</p>
-                <h1 class="text-3xl font-semibold text-slate-900 md:text-4xl">Naqd oqim paneli</h1>
-                <p class="max-w-2xl text-sm text-slate-500 md:text-base">Daromad va xarajatlarni nazorat qiling, turkumlar kesimida tahlil qiling va eng faol to'lov usullarini kuzating.</p>
-            </div>
-            <a href="../index.php" class="inline-flex items-center justify-center gap-2 self-start rounded-full border border-slate-200/80 bg-white/80 px-5 py-2.5 text-sm font-semibold text-slate-600 shadow-md shadow-slate-200 transition hover:-translate-y-0.5 hover:bg-white hover:text-slate-900 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-                </svg>
-                Asosiy sahifa
-            </a>
-        </header>
+        <div class="flex flex-col gap-3">
+            <p class="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">Moliyaviy boshqaruv</p>
+            <h1 class="text-3xl font-semibold text-slate-900 sm:text-4xl">Naqd oqim paneli</h1>
+            <p class="max-w-2xl text-sm text-slate-500 sm:text-base">Daromad va xarajatlarni kuzatish, turkumlarni tahlil qilish va to'lov usullarini solishtirish uchun zamonaviy boshqaruv paneli.</p>
+        </div>
 
         <?php if ($flashMessage): ?>
             <?php
