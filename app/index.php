@@ -67,6 +67,14 @@ $expenseDefaults = [
     'end' => date('Y-m-d'),
 ];
 $expenseRange = normalize_range($_GET['expense_start'] ?? null, $_GET['expense_end'] ?? null, $expenseDefaults['start'], $expenseDefaults['end'], $filterWarnings, 'Xarajatlar filtri');
+
+$categoryDefaults = [
+    'start' => date('Y-m-01'),
+    'end' => date('Y-m-d'),
+];
+$categoryRange = normalize_range($_GET['category_start'] ?? null, $_GET['category_end'] ?? null, $categoryDefaults['start'], $categoryDefaults['end'], $filterWarnings, 'Turkumlar filtri');
+$categoryRangeLabelStart = (new DateTime($categoryRange['start']))->format('d.m.Y');
+$categoryRangeLabelEnd = (new DateTime($categoryRange['end']))->format('d.m.Y');
 $selectedExpenseCategory = isset($_GET['expense_category']) ? (int) $_GET['expense_category'] : 0;
 
 $tableCreationQueries = [
@@ -100,21 +108,33 @@ if ($categoryResult instanceof mysqli_result) {
     $categoryResult->free();
 }
 
-$categoryStatsSql = "SELECT c.id, c.name, COUNT(DISTINCT tc.transaction_id) AS expense_count,
-        COALESCE(SUM(CASE WHEN t.cash_out = 1 THEN t.payment END), 0) AS total_spent
+$categoryStatsSql = "SELECT c.id, c.name,
+        COUNT(DISTINCT CASE WHEN t.id IS NOT NULL THEN t.id END) AS expense_count,
+        COALESCE(SUM(t.payment), 0) AS total_spent
     FROM expense_categories c
     LEFT JOIN transaction_categories tc ON tc.category_id = c.id
-    LEFT JOIN transactions t ON t.id = tc.transaction_id AND t.cash_out = 1
+    LEFT JOIN transactions t ON t.id = tc.transaction_id AND t.cash_out = 1 AND t.date BETWEEN ? AND ?
     GROUP BY c.id, c.name
     ORDER BY c.name";
-$categoryStatsResult = $conn->query($categoryStatsSql);
-if ($categoryStatsResult instanceof mysqli_result) {
-    while ($row = $categoryStatsResult->fetch_assoc()) {
-        $row['expense_count'] = (int) $row['expense_count'];
-        $row['total_spent'] = (float) $row['total_spent'];
-        $categoryStats[] = $row;
+$categoryStatsStmt = $conn->prepare($categoryStatsSql);
+if ($categoryStatsStmt) {
+    $categoryStatsStmt->bind_param('ss', $categoryRange['start'], $categoryRange['end']);
+    if ($categoryStatsStmt->execute()) {
+        $categoryStatsResult = $categoryStatsStmt->get_result();
+        if ($categoryStatsResult instanceof mysqli_result) {
+            while ($row = $categoryStatsResult->fetch_assoc()) {
+                $row['expense_count'] = (int) $row['expense_count'];
+                $row['total_spent'] = (float) $row['total_spent'];
+                $categoryStats[] = $row;
+            }
+            $categoryStatsResult->free();
+        }
+    } else {
+        $filterWarnings[] = "Turkumlar statistikasi yuklanmadi: " . $categoryStatsStmt->error;
     }
-    $categoryStatsResult->free();
+    $categoryStatsStmt->close();
+} else {
+    $filterWarnings[] = 'Turkumlar statistikasi uchun so\'rov tayyorlanmadi: ' . $conn->error;
 }
 
 $totalsSql = "SELECT
@@ -377,6 +397,9 @@ if ($explicitTab === null) {
     if (!empty(array_intersect(array_keys($_GET), ['expense_start', 'expense_end', 'expense_category']))) {
         $activeTab = 'expense';
     }
+    if (!empty(array_intersect(array_keys($_GET), ['category_start', 'category_end']))) {
+        $activeTab = 'categories';
+    }
 }
 
 $preservedForm = $_SESSION['form_values'] ?? null;
@@ -415,6 +438,44 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
 function uzs(float $value): string
 {
     return number_format($value, 0, '.', ' ') . ' so\'m';
+}
+
+function renderComment(?string $comment): string
+{
+    if ($comment === null) {
+        $comment = '';
+    }
+
+    $comment = trim($comment);
+    if ($comment === '') {
+        return '<span class="text-slate-400">—</span>';
+    }
+
+    $pattern = '/https?:\/\/[^\s]+/i';
+    $result = '';
+    $offset = 0;
+
+    while (preg_match($pattern, $comment, $match, PREG_OFFSET_CAPTURE, $offset)) {
+        $url = $match[0][0];
+        $position = $match[0][1];
+
+        $before = substr($comment, $offset, $position - $offset);
+        if ($before !== '') {
+            $result .= htmlspecialchars($before, ENT_QUOTES);
+        }
+
+        $safeUrl = htmlspecialchars($url, ENT_QUOTES);
+        $result .= '<span class="underline decoration-dotted text-primary-600">' . $safeUrl . '</span>';
+        $result .= '<a href="' . $safeUrl . '" target="_blank" rel="noopener noreferrer" class="ml-1 inline-flex items-center text-primary-500 hover:text-primary-600" aria-label="Havolani yangi oynada ochish">↗</a>';
+
+        $offset = $position + strlen($url);
+    }
+
+    if ($offset < strlen($comment)) {
+        $result .= htmlspecialchars(substr($comment, $offset), ENT_QUOTES);
+    }
+
+    return $result;
 }
 ?>
 <!DOCTYPE html>
@@ -669,7 +730,7 @@ function uzs(float $value): string
                                             <td class="px-4 py-3 font-medium text-slate-700"><?= htmlspecialchars($income['date'], ENT_QUOTES) ?></td>
                                             <td class="px-4 py-3 text-primary-600 font-semibold"><?= uzs($income['payment']) ?></td>
                                             <td class="px-4 py-3 text-slate-600"><?= htmlspecialchars($income['method'], ENT_QUOTES) ?></td>
-                                            <td class="px-4 py-3 text-slate-500"><?= htmlspecialchars($income['comment'] ?? '', ENT_QUOTES) ?></td>
+                                            <td class="px-4 py-3 text-slate-500"><?= renderComment($income['comment'] ?? '') ?></td>
                                             <td class="px-4 py-3 text-right">
                                                 <div class="flex justify-end gap-2">
                                                     <button type="button" class="edit-income inline-flex items-center rounded-lg border border-primary-200 px-3 py-1.5 text-xs font-semibold text-primary-600 transition hover:bg-primary-50" data-transaction='<?= json_encode([
@@ -790,7 +851,7 @@ function uzs(float $value): string
                                             <td class="px-4 py-3 text-rose-500 font-semibold"><?= uzs($expense['payment']) ?></td>
                                             <td class="px-4 py-3 text-slate-600"><?= htmlspecialchars($expense['category_name'], ENT_QUOTES) ?></td>
                                             <td class="px-4 py-3 text-slate-600"><?= htmlspecialchars($expense['method'], ENT_QUOTES) ?></td>
-                                            <td class="px-4 py-3 text-slate-500"><?= htmlspecialchars($expense['comment'] ?? '', ENT_QUOTES) ?></td>
+                                            <td class="px-4 py-3 text-slate-500"><?= renderComment($expense['comment'] ?? '') ?></td>
                                             <td class="px-4 py-3 text-right">
                                                 <div class="flex justify-end gap-2">
                                                     <button type="button" class="edit-expense inline-flex items-center rounded-lg border border-primary-200 px-3 py-1.5 text-xs font-semibold text-primary-600 transition hover:bg-primary-50" data-transaction='<?= json_encode([
@@ -910,6 +971,24 @@ function uzs(float $value): string
                         <h2 class="text-lg font-semibold text-slate-900">Xarajat turlari</h2>
                         <p class="text-sm text-slate-500">Turkumlar bo'yicha xarajatlaringizni boshqaring</p>
                     </div>
+                    <form method="get" class="grid gap-3 text-sm md:grid-cols-5">
+                        <input type="hidden" name="tab" value="categories">
+                        <div>
+                            <label class="text-slate-600" for="category-start">Boshlanish</label>
+                            <input id="category-start" type="date" name="category_start" value="<?= htmlspecialchars($categoryRange['start'], ENT_QUOTES) ?>" class="mt-1 w-full rounded-xl border-slate-200 bg-white/80 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200">
+                        </div>
+                        <div>
+                            <label class="text-slate-600" for="category-end">Tugash</label>
+                            <input id="category-end" type="date" name="category_end" value="<?= htmlspecialchars($categoryRange['end'], ENT_QUOTES) ?>" class="mt-1 w-full rounded-xl border-slate-200 bg-white/80 px-3 py-2 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200">
+                        </div>
+                        <div class="md:col-span-2 flex items-end gap-3">
+                            <button type="submit" class="inline-flex w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-600 transition hover:bg-slate-100">Filtrlash</button>
+                            <a href="index.php?tab=categories" class="inline-flex items-center justify-center rounded-xl border border-transparent bg-slate-100 px-4 py-2 font-semibold text-slate-500 transition hover:bg-slate-200">Tozalash</a>
+                        </div>
+                        <div class="md:col-span-1 flex items-end text-xs text-slate-400 md:justify-end">
+                            <span>Davr: <?= htmlspecialchars($categoryRangeLabelStart, ENT_QUOTES) ?> — <?= htmlspecialchars($categoryRangeLabelEnd, ENT_QUOTES) ?></span>
+                        </div>
+                    </form>
                     <form action="manage_category.php" method="post" class="grid gap-3 md:grid-cols-12">
                         <input type="hidden" name="action" value="create">
                         <div class="md:col-span-9">
@@ -927,7 +1006,10 @@ function uzs(float $value): string
                                 <tr>
                                     <th class="px-4 py-3">Nomi</th>
                                     <th class="px-4 py-3">Xarajatlar soni</th>
-                                    <th class="px-4 py-3">Jami xarajat</th>
+                                    <th class="px-4 py-3">
+                                        <span>Jami xarajat</span>
+                                        <span class="mt-1 block text-[0.65rem] font-normal uppercase tracking-wide text-slate-400">(<?= htmlspecialchars($categoryRangeLabelStart, ENT_QUOTES) ?> — <?= htmlspecialchars($categoryRangeLabelEnd, ENT_QUOTES) ?>)</span>
+                                    </th>
                                     <th class="px-4 py-3 text-right">Amallar</th>
                                 </tr>
                             </thead>
