@@ -379,6 +379,14 @@ if ($explicitTab === null) {
 $preservedForm = $_SESSION['form_values'] ?? null;
 unset($_SESSION['form_values']);
 
+$reopenModal = null;
+if ($preservedForm) {
+    $preservedType = $preservedForm['transaction_type'] ?? '';
+    if (in_array($preservedType, ['income', 'expense'], true)) {
+        $reopenModal = $preservedType;
+    }
+}
+
 $defaultFormState = [
     'amount' => '',
     'date' => date('Y-m-d'),
@@ -520,7 +528,7 @@ function uzs(float $value): string
             </div>
         <?php endif; ?>
 
-        <nav class="mt-5 flex flex-wrap items-center gap-2 rounded-2xl border border-white/70 bg-white/80 p-2 shadow-sm shadow-slate-200/70 backdrop-blur">
+        <nav class="mt-5 flex flex-wrap items-center gap-2 rounded-2xl border border-primary-100/70 bg-gradient-to-r from-primary-50/90 via-white/70 to-accent-50/80 p-2 shadow-md shadow-primary-100/70 backdrop-blur">
             <?php
             $tabs = [
                 'overview' => 'Umumiy',
@@ -577,41 +585,17 @@ function uzs(float $value): string
             </div>
 
             <div data-tab-panel="income" class="tab-panel <?= $activeTab === 'income' ? '' : 'hidden' ?> space-y-8">
-                <div class="rounded-3xl border border-white/80 bg-white/90 p-6 shadow-lg shadow-slate-200/70">
-                    <h2 class="text-lg font-semibold text-slate-900">Yangi daromad qo'shish</h2>
-                    <form action="save_transaction.php" method="post" class="mt-4 grid gap-4 md:grid-cols-2">
-                        <input type="hidden" name="transaction_type" value="income">
+                <div class="rounded-3xl border border-primary-100/70 bg-primary-50/80 p-6 shadow-lg shadow-primary-200/40">
+                    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                            <label class="text-sm font-medium text-slate-600" for="income-amount">Summa</label>
-                            <input id="income-amount" type="number" step="0.01" min="0" name="amount" value="<?= htmlspecialchars($incomeForm['amount'], ENT_QUOTES) ?>" required class="mt-2 block w-full rounded-xl border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200">
+                            <h2 class="text-lg font-semibold text-primary-700">Daromadlar oynasi</h2>
+                            <p class="text-sm text-primary-600/80">Tanlangan davr bo'yicha daromadlar va to'lov usullari</p>
                         </div>
-                        <div>
-                            <label class="text-sm font-medium text-slate-600" for="income-date">Sana</label>
-                            <input id="income-date" type="date" name="date" value="<?= htmlspecialchars($incomeForm['date'], ENT_QUOTES) ?>" required class="mt-2 block w-full rounded-xl border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200">
+                        <div class="text-sm text-primary-700/80">
+                            <p>Jami: <span class="font-semibold text-primary-800"><?= uzs($incomeTotals['total']) ?></span></p>
+                            <p class="mt-1">Naqd: <?= uzs($incomeTotals['cash']) ?> · Click: <?= uzs($incomeTotals['click']) ?></p>
                         </div>
-                        <div>
-                            <label class="text-sm font-medium text-slate-600">To'lov usuli</label>
-                            <div class="mt-2 flex items-center gap-4">
-                                <label class="inline-flex items-center gap-2 text-sm text-slate-600">
-                                    <input type="radio" name="payment_method" value="cash" <?= $incomeForm['payment_method'] === 'cash' ? 'checked' : '' ?> required class="rounded border-slate-300 text-primary-500 focus:ring-primary-500">
-                                    Naqd
-                                </label>
-                                <label class="inline-flex items-center gap-2 text-sm text-slate-600">
-                                    <input type="radio" name="payment_method" value="click" <?= $incomeForm['payment_method'] === 'click' ? 'checked' : '' ?> required class="rounded border-slate-300 text-primary-500 focus:ring-primary-500">
-                                    Click
-                                </label>
-                            </div>
-                        </div>
-                        <div class="md:col-span-2">
-                            <label class="text-sm font-medium text-slate-600" for="income-comment">Izoh</label>
-                            <textarea id="income-comment" name="comment" rows="2" class="mt-2 block w-full rounded-xl border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200" placeholder="Masalan, xizmat uchun to'lov"><?= htmlspecialchars($incomeForm['comment'], ENT_QUOTES) ?></textarea>
-                        </div>
-                        <div class="md:col-span-2 flex justify-end">
-                            <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-primary-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary-500/30 transition hover:bg-primary-600">
-                                Saqlash
-                            </button>
-                        </div>
-                    </form>
+                    </div>
                 </div>
 
                 <div class="rounded-3xl border border-white/80 bg-white/90 p-6 shadow-lg shadow-slate-200/70 space-y-6">
@@ -699,56 +683,25 @@ function uzs(float $value): string
                         </table>
                     </div>
                 </div>
+
+                <button type="button" data-open-modal="#incomeCreateModal" class="open-income-create fixed bottom-24 right-6 z-30 inline-flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-accent-500 text-2xl font-semibold text-white shadow-lg shadow-primary-500/40 transition hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500">
+                    <span aria-hidden="true">+</span>
+                    <span class="sr-only">Yangi daromad qo'shish</span>
+                </button>
             </div>
 
             <div data-tab-panel="expense" class="tab-panel <?= $activeTab === 'expense' ? '' : 'hidden' ?> space-y-8">
-                <div class="rounded-3xl border border-white/80 bg-white/90 p-6 shadow-lg shadow-slate-200/70">
-                    <h2 class="text-lg font-semibold text-slate-900">Yangi xarajat qo'shish</h2>
-                    <form action="save_transaction.php" method="post" class="mt-4 grid gap-4 md:grid-cols-2">
-                        <input type="hidden" name="transaction_type" value="expense">
+                <div class="rounded-3xl border border-rose-100/70 bg-rose-50/80 p-6 shadow-lg shadow-rose-200/40">
+                    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                            <label class="text-sm font-medium text-slate-600" for="expense-amount">Summa</label>
-                            <input id="expense-amount" type="number" step="0.01" min="0" name="amount" value="<?= htmlspecialchars($expenseForm['amount'], ENT_QUOTES) ?>" required class="mt-2 block w-full rounded-xl border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200">
+                            <h2 class="text-lg font-semibold text-rose-600">Xarajatlar oynasi</h2>
+                            <p class="text-sm text-rose-500/80">Davr ichida qilingan xarajatlar va turkumlar</p>
                         </div>
-                        <div>
-                            <label class="text-sm font-medium text-slate-600" for="expense-date">Sana</label>
-                            <input id="expense-date" type="date" name="date" value="<?= htmlspecialchars($expenseForm['date'], ENT_QUOTES) ?>" required class="mt-2 block w-full rounded-xl border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200">
+                        <div class="text-sm text-rose-600/80">
+                            <p>Jami: <span class="font-semibold text-rose-700"><?= uzs($expenseTotals['total']) ?></span></p>
+                            <p class="mt-1">Naqd: <?= uzs($expenseTotals['cash']) ?> · Click: <?= uzs($expenseTotals['click']) ?></p>
                         </div>
-                        <div>
-                            <label class="text-sm font-medium text-slate-600">To'lov usuli</label>
-                            <div class="mt-2 flex items-center gap-4">
-                                <label class="inline-flex items-center gap-2 text-sm text-slate-600">
-                                    <input type="radio" name="payment_method" value="cash" <?= $expenseForm['payment_method'] === 'cash' ? 'checked' : '' ?> required class="rounded border-slate-300 text-primary-500 focus:ring-primary-500">
-                                    Naqd
-                                </label>
-                                <label class="inline-flex items-center gap-2 text-sm text-slate-600">
-                                    <input type="radio" name="payment_method" value="click" <?= $expenseForm['payment_method'] === 'click' ? 'checked' : '' ?> required class="rounded border-slate-300 text-primary-500 focus:ring-primary-500">
-                                    Click
-                                </label>
-                            </div>
-                        </div>
-                        <div>
-                            <label class="text-sm font-medium text-slate-600" for="expense-category">Turkum</label>
-                            <div class="mt-2 flex gap-2">
-                                <select id="expense-category" name="category_id" class="w-full rounded-xl border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200">
-                                    <option value="">— Tanlanmagan —</option>
-                                    <?php foreach ($categories as $category): ?>
-                                        <option value="<?= (int) $category['id'] ?>" <?= $expenseForm['category_id'] == $category['id'] ? 'selected' : '' ?>><?= htmlspecialchars($category['name'], ENT_QUOTES) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                                <button type="button" class="open-category-modal inline-flex items-center justify-center rounded-xl border border-primary-200 bg-primary-50 px-3 py-2 text-sm font-semibold text-primary-600 transition hover:bg-primary-100">+</button>
-                            </div>
-                        </div>
-                        <div class="md:col-span-2">
-                            <label class="text-sm font-medium text-slate-600" for="expense-comment">Izoh</label>
-                            <textarea id="expense-comment" name="comment" rows="2" class="mt-2 block w-full rounded-xl border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200" placeholder="Masalan, ofis uchun sarf"><?= htmlspecialchars($expenseForm['comment'], ENT_QUOTES) ?></textarea>
-                        </div>
-                        <div class="md:col-span-2 flex justify-end">
-                            <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-primary-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary-500/30 transition hover:bg-primary-600">
-                                Saqlash
-                            </button>
-                        </div>
-                    </form>
+                    </div>
                 </div>
 
                 <div class="rounded-3xl border border-white/80 bg-white/90 p-6 shadow-lg shadow-slate-200/70 space-y-6">
@@ -852,6 +805,11 @@ function uzs(float $value): string
                         </table>
                     </div>
                 </div>
+
+                <button type="button" data-open-modal="#expenseCreateModal" class="open-expense-create fixed bottom-24 right-6 z-30 inline-flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-rose-500 to-primary-500 text-2xl font-semibold text-white shadow-lg shadow-rose-400/40 transition hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500">
+                    <span aria-hidden="true">+</span>
+                    <span class="sr-only">Yangi xarajat qo'shish</span>
+                </button>
             </div>
 
             <div data-tab-panel="reports" class="tab-panel <?= $activeTab === 'reports' ? '' : 'hidden' ?> space-y-8">
@@ -921,7 +879,7 @@ function uzs(float $value): string
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100 bg-white/70">
-                                <?php foreach ($reportTable as $row): ?>
+                                <?php foreach (array_reverse($reportTable) as $row): ?>
                                     <tr>
                                         <td class="px-4 py-3 font-medium text-slate-700"><?= htmlspecialchars($row['label'], ENT_QUOTES) ?></td>
                                         <td class="px-4 py-3 text-primary-600 font-semibold"><?= uzs($row['income']) ?></td>
@@ -997,19 +955,55 @@ function uzs(float $value): string
         </section>
     </main>
 
+    <div id="incomeCreateModal" class="modal fixed inset-0 z-40 hidden items-center justify-center bg-slate-900/40 px-4 py-8">
+        <div class="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-slate-900">Yangi daromad</h3>
+                <button type="button" class="close-modal text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+            <form method="post" action="save_transaction.php" class="mt-4 space-y-4" data-currency-form>
+                <input type="hidden" name="transaction_type" value="income">
+                <div>
+                    <label class="text-sm font-medium text-slate-600" for="income-create-amount">Summa</label>
+                    <input id="income-create-amount" name="amount" type="text" inputmode="numeric" autocomplete="off" value="<?= htmlspecialchars($incomeForm['amount'], ENT_QUOTES) ?>" required data-currency-input class="mt-1 w-full rounded-xl border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200">
+                </div>
+                <div>
+                    <label class="text-sm font-medium text-slate-600" for="income-create-date">Sana</label>
+                    <input id="income-create-date" name="date" type="date" value="<?= htmlspecialchars($incomeForm['date'], ENT_QUOTES) ?>" required class="mt-1 w-full rounded-xl border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200">
+                </div>
+                <div class="flex gap-4">
+                    <label class="inline-flex flex-1 items-center gap-2 text-sm text-slate-600">
+                        <input type="radio" name="payment_method" value="cash" <?= $incomeForm['payment_method'] === 'cash' ? 'checked' : '' ?> required class="rounded border-slate-300 text-primary-500 focus:ring-primary-500"> Naqd
+                    </label>
+                    <label class="inline-flex flex-1 items-center gap-2 text-sm text-slate-600">
+                        <input type="radio" name="payment_method" value="click" <?= $incomeForm['payment_method'] === 'click' ? 'checked' : '' ?> required class="rounded border-slate-300 text-primary-500 focus:ring-primary-500"> Click
+                    </label>
+                </div>
+                <div>
+                    <label class="text-sm font-medium text-slate-600" for="income-create-comment">Izoh</label>
+                    <textarea id="income-create-comment" name="comment" rows="2" class="mt-1 w-full rounded-xl border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200" placeholder="Masalan, xizmat uchun to'lov"><?= htmlspecialchars($incomeForm['comment'], ENT_QUOTES) ?></textarea>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" class="close-modal inline-flex items-center rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100">Bekor qilish</button>
+                    <button type="submit" class="inline-flex items-center rounded-xl bg-primary-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/30 hover:bg-primary-600">Saqlash</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div id="incomeModal" class="modal fixed inset-0 z-40 hidden items-center justify-center bg-slate-900/40 px-4 py-8">
         <div class="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
             <div class="flex items-center justify-between">
                 <h3 class="text-lg font-semibold text-slate-900">Daromadni tahrirlash</h3>
                 <button type="button" class="close-modal text-slate-400 hover:text-slate-600">✕</button>
             </div>
-            <form method="post" action="manage_transaction.php" class="mt-4 space-y-4">
+            <form method="post" action="manage_transaction.php" class="mt-4 space-y-4" data-currency-form>
                 <input type="hidden" name="action" value="update">
                 <input type="hidden" name="transaction_type" value="income">
                 <input type="hidden" name="transaction_id" id="income-edit-id">
                 <div>
                     <label class="text-sm font-medium text-slate-600" for="income-edit-amount">Summa</label>
-                    <input id="income-edit-amount" name="amount" type="number" step="0.01" min="0" required class="mt-1 w-full rounded-xl border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200">
+                    <input id="income-edit-amount" name="amount" type="text" inputmode="numeric" required data-currency-input class="mt-1 w-full rounded-xl border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200">
                 </div>
                 <div>
                     <label class="text-sm font-medium text-slate-600" for="income-edit-date">Sana</label>
@@ -1035,19 +1029,67 @@ function uzs(float $value): string
         </div>
     </div>
 
+    <div id="expenseCreateModal" class="modal fixed inset-0 z-40 hidden items-center justify-center bg-slate-900/40 px-4 py-8">
+        <div class="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-slate-900">Yangi xarajat</h3>
+                <button type="button" class="close-modal text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+            <form method="post" action="save_transaction.php" class="mt-4 space-y-4" data-currency-form>
+                <input type="hidden" name="transaction_type" value="expense">
+                <div>
+                    <label class="text-sm font-medium text-slate-600" for="expense-create-amount">Summa</label>
+                    <input id="expense-create-amount" name="amount" type="text" inputmode="numeric" autocomplete="off" value="<?= htmlspecialchars($expenseForm['amount'], ENT_QUOTES) ?>" required data-currency-input class="mt-1 w-full rounded-xl border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200">
+                </div>
+                <div>
+                    <label class="text-sm font-medium text-slate-600" for="expense-create-date">Sana</label>
+                    <input id="expense-create-date" name="date" type="date" value="<?= htmlspecialchars($expenseForm['date'], ENT_QUOTES) ?>" required class="mt-1 w-full rounded-xl border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200">
+                </div>
+                <div class="flex gap-4">
+                    <label class="inline-flex flex-1 items-center gap-2 text-sm text-slate-600">
+                        <input type="radio" name="payment_method" value="cash" <?= $expenseForm['payment_method'] === 'cash' ? 'checked' : '' ?> required class="rounded border-slate-300 text-primary-500 focus:ring-primary-500"> Naqd
+                    </label>
+                    <label class="inline-flex flex-1 items-center gap-2 text-sm text-slate-600">
+                        <input type="radio" name="payment_method" value="click" <?= $expenseForm['payment_method'] === 'click' ? 'checked' : '' ?> required class="rounded border-slate-300 text-primary-500 focus:ring-primary-500"> Click
+                    </label>
+                </div>
+                <div>
+                    <label class="text-sm font-medium text-slate-600" for="expense-create-category">Turkum</label>
+                    <div class="mt-1 flex gap-2">
+                        <select id="expense-create-category" name="category_id" class="w-full rounded-xl border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200">
+                            <option value="">— Tanlanmagan —</option>
+                            <?php foreach ($categories as $category): ?>
+                                <option value="<?= (int) $category['id'] ?>" <?= $expenseForm['category_id'] == $category['id'] ? 'selected' : '' ?>><?= htmlspecialchars($category['name'], ENT_QUOTES) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <button type="button" class="open-category-modal inline-flex items-center justify-center rounded-xl border border-primary-200 bg-primary-50 px-3 py-2 text-sm font-semibold text-primary-600 transition hover:bg-primary-100" data-close-parent="true">+</button>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-sm font-medium text-slate-600" for="expense-create-comment">Izoh</label>
+                    <textarea id="expense-create-comment" name="comment" rows="2" class="mt-1 w-full rounded-xl border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200" placeholder="Masalan, ofis uchun sarf"><?= htmlspecialchars($expenseForm['comment'], ENT_QUOTES) ?></textarea>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" class="close-modal inline-flex items-center rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100">Bekor qilish</button>
+                    <button type="submit" class="inline-flex items-center rounded-xl bg-primary-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/30 hover:bg-primary-600">Saqlash</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div id="expenseModal" class="modal fixed inset-0 z-40 hidden items-center justify-center bg-slate-900/40 px-4 py-8">
         <div class="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
             <div class="flex items-center justify-between">
                 <h3 class="text-lg font-semibold text-slate-900">Xarajatni tahrirlash</h3>
                 <button type="button" class="close-modal text-slate-400 hover:text-slate-600">✕</button>
             </div>
-            <form method="post" action="manage_transaction.php" class="mt-4 space-y-4">
+            <form method="post" action="manage_transaction.php" class="mt-4 space-y-4" data-currency-form>
                 <input type="hidden" name="action" value="update">
                 <input type="hidden" name="transaction_type" value="expense">
                 <input type="hidden" name="transaction_id" id="expense-edit-id">
                 <div>
                     <label class="text-sm font-medium text-slate-600" for="expense-edit-amount">Summa</label>
-                    <input id="expense-edit-amount" name="amount" type="number" step="0.01" min="0" required class="mt-1 w-full rounded-xl border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200">
+                    <input id="expense-edit-amount" name="amount" type="text" inputmode="numeric" required data-currency-input class="mt-1 w-full rounded-xl border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200">
                 </div>
                 <div>
                     <label class="text-sm font-medium text-slate-600" for="expense-edit-date">Sana</label>
@@ -1104,6 +1146,40 @@ function uzs(float $value): string
     </div>
 
     <script>
+        const formatCurrencyValue = (value) => {
+            const digits = String(value ?? '').replace(/[^\d]/g, '');
+            if (!digits) {
+                return '';
+            }
+            return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        };
+
+        const normalizeCurrencyValue = (value) => String(value ?? '').replace(/[^\d]/g, '');
+
+        const applyCurrencyMask = (input) => {
+            const update = () => {
+                input.value = formatCurrencyValue(input.value);
+            };
+            update();
+            input.addEventListener('input', update);
+            input.addEventListener('blur', update);
+        };
+
+        const showModal = (selector) => {
+            if (!selector) {
+                return;
+            }
+            const modal = document.querySelector(selector);
+            if (!modal) {
+                return;
+            }
+            modal.classList.remove('hidden');
+            const focusTarget = modal.querySelector('[data-currency-input], input:not([type="hidden"]), textarea, select');
+            if (focusTarget) {
+                setTimeout(() => focusTarget.focus(), 0);
+            }
+        };
+
         const tabButtons = document.querySelectorAll('[data-tab-target]');
         const filterMap = {
             reports: ['start_date', 'end_date'],
@@ -1126,6 +1202,19 @@ function uzs(float $value): string
             });
         });
 
+        document.querySelectorAll('[data-open-modal]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const targetSelector = btn.getAttribute('data-open-modal');
+                if (btn.dataset.closeParent === 'true') {
+                    const parentModal = btn.closest('.modal');
+                    if (parentModal) {
+                        parentModal.classList.add('hidden');
+                    }
+                }
+                showModal(targetSelector);
+            });
+        });
+
         const modals = document.querySelectorAll('.modal');
         modals.forEach((modal) => {
             modal.addEventListener('click', (event) => {
@@ -1141,17 +1230,34 @@ function uzs(float $value): string
             });
         });
 
+        document.querySelectorAll('[data-currency-input]').forEach(applyCurrencyMask);
+        document.querySelectorAll('form[data-currency-form]').forEach((form) => {
+            form.addEventListener('submit', () => {
+                form.querySelectorAll('[data-currency-input]').forEach((input) => {
+                    input.value = normalizeCurrencyValue(input.value);
+                });
+            });
+        });
+
+        const reopenModal = '<?= $reopenModal ?? '' ?>';
+        if (reopenModal === 'income') {
+            showModal('#incomeCreateModal');
+        } else if (reopenModal === 'expense') {
+            showModal('#expenseCreateModal');
+        }
+
         document.querySelectorAll('.edit-income').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const data = JSON.parse(btn.getAttribute('data-transaction'));
                 document.getElementById('income-edit-id').value = data.id;
-                document.getElementById('income-edit-amount').value = data.amount;
+                const amountInput = document.getElementById('income-edit-amount');
+                amountInput.value = formatCurrencyValue(data.amount);
                 document.getElementById('income-edit-date').value = data.date;
                 document.getElementById('income-edit-comment').value = data.comment || '';
                 document.querySelectorAll('#incomeModal input[name="payment_method"]').forEach((input) => {
                     input.checked = input.value === data.method;
                 });
-                document.getElementById('incomeModal').classList.remove('hidden');
+                showModal('#incomeModal');
             });
         });
 
@@ -1159,7 +1265,8 @@ function uzs(float $value): string
             btn.addEventListener('click', () => {
                 const data = JSON.parse(btn.getAttribute('data-transaction'));
                 document.getElementById('expense-edit-id').value = data.id;
-                document.getElementById('expense-edit-amount').value = data.amount;
+                const amountInput = document.getElementById('expense-edit-amount');
+                amountInput.value = formatCurrencyValue(data.amount);
                 document.getElementById('expense-edit-date').value = data.date;
                 document.getElementById('expense-edit-comment').value = data.comment || '';
                 document.querySelectorAll('#expenseModal input[name="payment_method"]').forEach((input) => {
@@ -1169,7 +1276,7 @@ function uzs(float $value): string
                 if (categorySelect) {
                     categorySelect.value = data.category_id ? data.category_id : '0';
                 }
-                document.getElementById('expenseModal').classList.remove('hidden');
+                showModal('#expenseModal');
             });
         });
 
@@ -1187,7 +1294,7 @@ function uzs(float $value): string
                 if (categoryModalTitle) {
                     categoryModalTitle.textContent = 'Turkumni tahrirlash';
                 }
-                document.getElementById('categoryModal').classList.remove('hidden');
+                showModal('#categoryModal');
             });
         });
 
@@ -1201,7 +1308,13 @@ function uzs(float $value): string
                 if (categoryModalTitle) {
                     categoryModalTitle.textContent = 'Yangi turkum qo\'shish';
                 }
-                document.getElementById('categoryModal').classList.remove('hidden');
+                if (btn.dataset.closeParent === 'true') {
+                    const parentModal = btn.closest('.modal');
+                    if (parentModal) {
+                        parentModal.classList.add('hidden');
+                    }
+                }
+                showModal('#categoryModal');
             });
         });
 
