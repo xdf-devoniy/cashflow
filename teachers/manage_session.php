@@ -73,8 +73,9 @@ if (!$teacherResult) {
 
 $sessionDate = $_POST['session_date'] ?? '';
 $groupName = trim($_POST['group_name'] ?? '');
-$studentName = trim($_POST['student_name'] ?? '');
-$amount = isset($_POST['amount']) ? (float) $_POST['amount'] : 0;
+$studentsInput = $_POST['students'] ?? [];
+$studentNames = isset($studentsInput['name']) && is_array($studentsInput['name']) ? $studentsInput['name'] : [];
+$studentAmounts = isset($studentsInput['amount']) && is_array($studentsInput['amount']) ? $studentsInput['amount'] : [];
 $teacherPercentage = isset($_POST['teacher_percentage']) && $_POST['teacher_percentage'] !== ''
     ? (float) $_POST['teacher_percentage']
     : (float) $teacherResult['percentage'];
@@ -88,44 +89,149 @@ if ($groupName === '') {
     flash_redirect("Guruh nomi bo'sh bo'lmasligi kerak.", 'danger', $redirectPath);
 }
 
-if ($amount <= 0) {
-    flash_redirect("To'lov summasi 0 dan katta bo'lishi kerak.", 'danger', $redirectPath);
-}
-
 if ($teacherPercentage < 0 || $teacherPercentage > 100) {
     flash_redirect("O'qituvchi ulushi 0 va 100 oralig'ida bo'lishi kerak.", 'danger', $redirectPath);
 }
 
-$teacherShare = round($amount * ($teacherPercentage / 100), 2);
+$lineItems = [];
+$maxCount = max(count($studentNames), count($studentAmounts));
+for ($i = 0; $i < $maxCount; $i++) {
+    $name = isset($studentNames[$i]) ? trim((string) $studentNames[$i]) : '';
+    $value = isset($studentAmounts[$i]) ? (float) $studentAmounts[$i] : 0;
+
+    if ($name === '' && $value <= 0) {
+        continue;
+    }
+
+    if ($name === '') {
+        flash_redirect("Talaba ismi bo'sh bo'lishi kerak.", 'danger', $redirectPath);
+    }
+
+    if ($value <= 0) {
+        flash_redirect("Talaba to'lovi 0 dan katta bo'lishi kerak.", 'danger', $redirectPath);
+    }
+
+    $lineItems[] = [
+        'name' => $name,
+        'amount' => round($value, 2),
+    ];
+}
+
+if (!$lineItems) {
+    flash_redirect("Hech bo'lmaganda bitta talaba to'lovi kiritilishi kerak.", 'danger', $redirectPath);
+}
+
+$totalAmount = array_reduce($lineItems, static function ($carry, $item) {
+    return $carry + ($item['amount'] ?? 0);
+}, 0.0);
+
+if ($totalAmount <= 0) {
+    flash_redirect("Umumiy to'lov summasi 0 dan katta bo'lishi kerak.", 'danger', $redirectPath);
+}
+
+$teacherShare = round($totalAmount * ($teacherPercentage / 100), 2);
+$studentSummary = $lineItems[0]['name'];
+if (count($lineItems) > 1) {
+    $studentSummary .= ' +' . (count($lineItems) - 1) . ' ta talaba';
+}
 
 if ($action === 'create') {
+    $conn->begin_transaction();
+
     $stmt = $conn->prepare('INSERT INTO teacher_sessions (teacher_id, session_date, group_name, student_name, amount, teacher_percentage, teacher_share) VALUES (?, ?, ?, ?, ?, ?, ?)');
     if (!$stmt) {
+        $conn->rollback();
         flash_redirect("Dars yozuvini qo'shishda xatolik: " . $conn->error, 'danger', $redirectPath);
     }
-    $stmt->bind_param('isssddd', $teacherId, $sessionDate, $groupName, $studentName, $amount, $teacherPercentage, $teacherShare);
-    if ($stmt->execute()) {
+    $stmt->bind_param('isssddd', $teacherId, $sessionDate, $groupName, $studentSummary, $totalAmount, $teacherPercentage, $teacherShare);
+    if (!$stmt->execute()) {
+        $error = $stmt->error;
         $stmt->close();
-        flash_redirect("Dars tushumi qo'shildi.", 'success', $redirectPath);
+        $conn->rollback();
+        flash_redirect("Ma'lumotni saqlashda xatolik: " . $error, 'danger', $redirectPath);
     }
-    $error = $stmt->error;
+    $sessionId = (int) $stmt->insert_id;
     $stmt->close();
-    flash_redirect("Ma'lumotni saqlashda xatolik: " . $error, 'danger', $redirectPath);
+
+    $studentStmt = $conn->prepare('INSERT INTO teacher_session_students (session_id, student_name, amount) VALUES (?, ?, ?)');
+    if (!$studentStmt) {
+        $conn->rollback();
+        flash_redirect("Talaba to'lovlarini saqlashda xatolik: " . $conn->error, 'danger', $redirectPath);
+    }
+    $sessionIdParam = $sessionId;
+    $studentNameParam = '';
+    $studentAmountParam = 0.0;
+    $studentStmt->bind_param('isd', $sessionIdParam, $studentNameParam, $studentAmountParam);
+    foreach ($lineItems as $item) {
+        $studentNameParam = $item['name'];
+        $studentAmountParam = $item['amount'];
+        if (!$studentStmt->execute()) {
+            $error = $studentStmt->error;
+            $studentStmt->close();
+            $conn->rollback();
+            flash_redirect("Talaba to'lovlarini saqlashda xatolik: " . $error, 'danger', $redirectPath);
+        }
+    }
+    $studentStmt->close();
+
+    $conn->commit();
+    flash_redirect("Dars tushumi qo'shildi.", 'success', $redirectPath);
 }
 
 if ($sessionId <= 0) {
     flash_redirect("Dars yozuvi topilmadi.", 'danger', $redirectPath);
 }
 
+$conn->begin_transaction();
+
 $stmt = $conn->prepare('UPDATE teacher_sessions SET teacher_id = ?, session_date = ?, group_name = ?, student_name = ?, amount = ?, teacher_percentage = ?, teacher_share = ?, updated_at = NOW() WHERE id = ?');
 if (!$stmt) {
+    $conn->rollback();
     flash_redirect("Dars yozuvini yangilashda xatolik: " . $conn->error, 'danger', $redirectPath);
 }
-$stmt->bind_param('isssdddi', $teacherId, $sessionDate, $groupName, $studentName, $amount, $teacherPercentage, $teacherShare, $sessionId);
-if ($stmt->execute()) {
+$stmt->bind_param('isssdddi', $teacherId, $sessionDate, $groupName, $studentSummary, $totalAmount, $teacherPercentage, $teacherShare, $sessionId);
+if (!$stmt->execute()) {
+    $error = $stmt->error;
     $stmt->close();
-    flash_redirect("Dars yozuvi yangilandi.", 'success', $redirectPath);
+    $conn->rollback();
+    flash_redirect("Yangilashda xatolik: " . $error, 'danger', $redirectPath);
 }
-$error = $stmt->error;
 $stmt->close();
-flash_redirect("Yangilashda xatolik: " . $error, 'danger', $redirectPath);
+
+$deleteStudents = $conn->prepare('DELETE FROM teacher_session_students WHERE session_id = ?');
+if (!$deleteStudents) {
+    $conn->rollback();
+    flash_redirect("Talabalarni yangilashda xatolik: " . $conn->error, 'danger', $redirectPath);
+}
+$deleteStudents->bind_param('i', $sessionId);
+$deleteStudents->execute();
+$deleteError = $deleteStudents->error;
+$deleteStudents->close();
+if ($deleteError) {
+    $conn->rollback();
+    flash_redirect("Talabalarni yangilashda xatolik: " . $deleteError, 'danger', $redirectPath);
+}
+
+$studentStmt = $conn->prepare('INSERT INTO teacher_session_students (session_id, student_name, amount) VALUES (?, ?, ?)');
+if (!$studentStmt) {
+    $conn->rollback();
+    flash_redirect("Talaba to'lovlarini saqlashda xatolik: " . $conn->error, 'danger', $redirectPath);
+}
+$sessionIdParam = $sessionId;
+$studentNameParam = '';
+$studentAmountParam = 0.0;
+$studentStmt->bind_param('isd', $sessionIdParam, $studentNameParam, $studentAmountParam);
+foreach ($lineItems as $item) {
+    $studentNameParam = $item['name'];
+    $studentAmountParam = $item['amount'];
+    if (!$studentStmt->execute()) {
+        $error = $studentStmt->error;
+        $studentStmt->close();
+        $conn->rollback();
+        flash_redirect("Talaba to'lovlarini saqlashda xatolik: " . $error, 'danger', $redirectPath);
+    }
+}
+$studentStmt->close();
+
+$conn->commit();
+flash_redirect("Dars yozuvi yangilandi.", 'success', $redirectPath);

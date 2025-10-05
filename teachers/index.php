@@ -48,6 +48,16 @@ $conn->query("CREATE TABLE IF NOT EXISTS teacher_payouts (
     CONSTRAINT fk_teacher_payouts_teacher FOREIGN KEY (teacher_id) REFERENCES teacher_profiles(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+$conn->query("CREATE TABLE IF NOT EXISTS teacher_session_students (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    session_id INT NOT NULL,
+    student_name VARCHAR(255) NOT NULL,
+    amount DECIMAL(12,2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL DEFAULT NULL,
+    CONSTRAINT fk_session_student_session FOREIGN KEY (session_id) REFERENCES teacher_sessions(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
 function format_money(float $value): string
 {
     return number_format($value, 0, '.', ' ');
@@ -192,6 +202,42 @@ if ($sessionStmt) {
     $sessionStmt->close();
 }
 
+$sessionStudentsMap = [];
+if ($sessionRows) {
+    $sessionIds = array_map('intval', array_column($sessionRows, 'id'));
+    if ($sessionIds) {
+        $placeholders = implode(',', array_fill(0, count($sessionIds), '?'));
+        $studentSql = "SELECT session_id, student_name, amount FROM teacher_session_students WHERE session_id IN ($placeholders) ORDER BY id";
+        $studentStmt = $conn->prepare($studentSql);
+        if ($studentStmt) {
+            $types = str_repeat('i', count($sessionIds));
+            $bindParams = [$types];
+            foreach ($sessionIds as $index => $sessionId) {
+                $bindParams[] = $sessionIds[$index];
+            }
+            $refParams = [];
+            foreach ($bindParams as $key => $value) {
+                $refParams[$key] = &$bindParams[$key];
+            }
+            call_user_func_array([$studentStmt, 'bind_param'], $refParams);
+            if ($studentStmt->execute()) {
+                $studentResult = $studentStmt->get_result();
+                while ($studentRow = $studentResult->fetch_assoc()) {
+                    $sessionId = (int) $studentRow['session_id'];
+                    if (!isset($sessionStudentsMap[$sessionId])) {
+                        $sessionStudentsMap[$sessionId] = [];
+                    }
+                    $sessionStudentsMap[$sessionId][] = [
+                        'student_name' => $studentRow['student_name'],
+                        'amount' => (float) ($studentRow['amount'] ?? 0),
+                    ];
+                }
+            }
+            $studentStmt->close();
+        }
+    }
+}
+
 $payoutRows = [];
 $payoutSql = "SELECT p.id, p.teacher_id, p.paid_at, p.amount, p.payment_method, p.note, p.transaction_id, t.name AS teacher_name
                FROM teacher_payouts p
@@ -309,6 +355,10 @@ $redirectQuery = http_build_query($filters + ($teacherFilter ? ['teacher_id' => 
         .glass { backdrop-filter: blur(16px); background: rgba(255, 255, 255, 0.7); }
         dialog::backdrop { background: rgba(15, 23, 42, 0.4); }
         dialog { border: 0; border-radius: 1rem; padding: 0; }
+        @media print {
+            body { background: #ffffff; color: #0f172a; }
+            .no-print { display: none !important; }
+        }
     </style>
 </head>
 <body class="bg-slate-25 min-h-screen text-slate-700">
@@ -318,7 +368,7 @@ $redirectQuery = http_build_query($filters + ($teacherFilter ? ['teacher_id' => 
             <h1 class="text-3xl font-semibold text-slate-900">O'qituvchilar moliyasi</h1>
             <p class="text-slate-500">Guruhlar tushumi, foizlar va maosh to'lovlarini nazorat qiling.</p>
         </div>
-        <div class="flex flex-wrap items-center gap-3">
+        <div class="flex flex-wrap items-center gap-3 no-print">
             <button data-open="teacherDialog" class="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-white font-medium shadow-soft transition hover:bg-primary/90">
                 <span class="text-lg">＋</span> Yangi o'qituvchi
             </button>
@@ -327,6 +377,12 @@ $redirectQuery = http_build_query($filters + ($teacherFilter ? ['teacher_id' => 
             </button>
             <button data-open="payoutDialog" class="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-white font-medium shadow-lg transition hover:bg-accent/90">
                 <span class="text-lg">＋</span> Maosh to'lovi
+            </button>
+            <a href="export.php<?= $redirectQuery ? '?' . htmlspecialchars($redirectQuery) : '' ?>" class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 shadow transition hover:bg-slate-50">
+                📄 Excelga eksport
+            </a>
+            <button type="button" onclick="window.print()" class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 shadow transition hover:bg-slate-50">
+                🖨 Chop etish
             </button>
         </div>
     </div>
@@ -452,7 +508,9 @@ $redirectQuery = http_build_query($filters + ($teacherFilter ? ['teacher_id' => 
         </div>
         <div class="glass rounded-2xl p-5 shadow-soft">
             <h2 class="text-xl font-semibold text-slate-900">Oylik tahlil</h2>
-            <canvas id="teacherChart" class="mt-6"></canvas>
+            <div class="mt-6 h-72">
+                <canvas id="teacherChart" class="h-full w-full"></canvas>
+            </div>
         </div>
     </div>
 
@@ -481,8 +539,20 @@ $redirectQuery = http_build_query($filters + ($teacherFilter ? ['teacher_id' => 
                             <td class="py-3 pr-4 text-slate-700"><?= htmlspecialchars($session['teacher_name']) ?></td>
                             <td class="py-3 pr-4">
                                 <div class="text-slate-900 font-semibold"><?= htmlspecialchars($session['group_name']) ?></div>
-                                <?php if ($session['student_name']): ?>
-                                    <div class="text-xs text-slate-500"><?= htmlspecialchars($session['student_name']) ?></div>
+                                <?php $students = $sessionStudentsMap[(int) $session['id']] ?? []; ?>
+                                <?php if ($students): ?>
+                                    <ul class="mt-2 space-y-1 text-xs text-slate-500">
+                                        <?php foreach ($students as $student): ?>
+                                            <li class="flex justify-between gap-4">
+                                                <span class="font-medium text-slate-600"><?= htmlspecialchars($student['student_name']) ?></span>
+                                                <span class="text-slate-500"><?= format_money((float) $student['amount']) ?> so'm</span>
+                                            </li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                <?php elseif ($session['student_name']): ?>
+                                    <div class="mt-2 text-xs text-slate-500"><?= htmlspecialchars($session['student_name']) ?></div>
+                                <?php else: ?>
+                                    <div class="mt-2 text-xs text-slate-400">Talabalar kiritilmagan</div>
                                 <?php endif; ?>
                             </td>
                             <td class="py-3 pr-4 font-semibold text-slate-900"><?= format_money((float) $session['amount']) ?></td>
@@ -498,6 +568,12 @@ $redirectQuery = http_build_query($filters + ($teacherFilter ? ['teacher_id' => 
                                         'student_name' => $session['student_name'],
                                         'amount' => $session['amount'],
                                         'teacher_percentage' => $session['teacher_percentage'],
+                                        'students' => array_map(static function ($student) {
+                                            return [
+                                                'name' => $student['student_name'],
+                                                'amount' => $student['amount'],
+                                            ];
+                                        }, $sessionStudentsMap[(int) $session['id']] ?? []),
                                     ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>' class="rounded-lg border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:bg-white">Tahrirlash</button>
                                     <form action="manage_session.php" method="post" onsubmit="return confirm('Ushbu dars yozuvini o\'chirasizmi?')">
                                         <input type="hidden" name="action" value="delete">
@@ -614,30 +690,47 @@ $redirectQuery = http_build_query($filters + ($teacherFilter ? ['teacher_id' => 
             <h3 class="text-xl font-semibold text-slate-900">Dars tushumini kiritish</h3>
             <button type="button" class="text-slate-400 transition hover:text-slate-600" data-close>✕</button>
         </div>
-        <div class="mt-4 grid gap-4 md:grid-cols-2">
-            <label class="flex flex-col gap-1 text-sm font-medium text-slate-600">O'qituvchi
-                <select name="teacher_id" required class="rounded-lg border border-slate-200 px-3 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30">
-                    <option value="">Tanlang</option>
-                    <?php foreach ($teacherMetrics as $teacher): ?>
-                        <option value="<?= $teacher['id'] ?>" data-percentage="<?= htmlspecialchars($teacher['percentage']) ?>"><?= htmlspecialchars($teacher['name']) ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </label>
-            <label class="flex flex-col gap-1 text-sm font-medium text-slate-600">Sana
-                <input type="date" name="session_date" value="<?= htmlspecialchars($filters['end_date']) ?>" required class="rounded-lg border border-slate-200 px-3 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30">
-            </label>
-            <label class="flex flex-col gap-1 text-sm font-medium text-slate-600">Guruh nomi
-                <input type="text" name="group_name" required class="rounded-lg border border-slate-200 px-3 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30">
-            </label>
-            <label class="flex flex-col gap-1 text-sm font-medium text-slate-600">Talaba (ixtiyoriy)
-                <input type="text" name="student_name" class="rounded-lg border border-slate-200 px-3 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30">
-            </label>
-            <label class="flex flex-col gap-1 text-sm font-medium text-slate-600">To'lov summasi (so'm)
-                <input type="number" name="amount" step="0.01" min="0" required class="rounded-lg border border-slate-200 px-3 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30">
-            </label>
-            <label class="flex flex-col gap-1 text-sm font-medium text-slate-600">O'qituvchi ulushi (%)
-                <input type="number" name="teacher_percentage" step="0.01" min="0" max="100" required class="rounded-lg border border-slate-200 px-3 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30">
-            </label>
+        <div class="mt-4 grid gap-4">
+            <div class="grid gap-4 md:grid-cols-2">
+                <label class="flex flex-col gap-1 text-sm font-medium text-slate-600">O'qituvchi
+                    <select name="teacher_id" required class="rounded-lg border border-slate-200 px-3 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30">
+                        <option value="">Tanlang</option>
+                        <?php foreach ($teacherMetrics as $teacher): ?>
+                            <option value="<?= $teacher['id'] ?>" data-percentage="<?= htmlspecialchars($teacher['percentage']) ?>"><?= htmlspecialchars($teacher['name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium text-slate-600">Sana
+                    <input type="date" name="session_date" value="<?= htmlspecialchars($filters['end_date']) ?>" required class="rounded-lg border border-slate-200 px-3 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30">
+                </label>
+            </div>
+            <div class="grid gap-4 md:grid-cols-2">
+                <label class="flex flex-col gap-1 text-sm font-medium text-slate-600">Guruh / davr nomi
+                    <input type="text" name="group_name" placeholder="Masalan: 2024-yil may oyining 1-guruhi" required class="rounded-lg border border-slate-200 px-3 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30">
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium text-slate-600">O'qituvchi ulushi (%)
+                    <input type="number" name="teacher_percentage" step="0.01" min="0" max="100" required class="rounded-lg border border-slate-200 px-3 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30">
+                </label>
+            </div>
+            <div class="md:col-span-2">
+                <div class="flex items-center justify-between">
+                    <p class="text-sm font-medium text-slate-600">Talaba to'lovlari</p>
+                    <button type="button" data-add-student class="inline-flex items-center gap-2 rounded-lg border border-primary/30 px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary/10">＋ Talaba qo'shish</button>
+                </div>
+                <div class="mt-3 space-y-3" data-student-rows></div>
+                <p class="mt-3 text-xs text-slate-500" data-student-summary>Jami to'lov: 0 so'm · O'qituvchi ulushi: 0 so'm</p>
+                <template id="studentRowTemplate">
+                    <div class="grid items-end gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,160px)_auto]" data-student-row>
+                        <label class="flex flex-col gap-1 text-xs font-medium text-slate-600">Talaba ismi
+                            <input type="text" name="students[name][]" data-student-name class="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30" placeholder="Masalan: Dilshod" required>
+                        </label>
+                        <label class="flex flex-col gap-1 text-xs font-medium text-slate-600">To'lov (so'm)
+                            <input type="number" name="students[amount][]" data-student-amount step="0.01" min="0" class="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30" placeholder="0" required>
+                        </label>
+                        <button type="button" data-remove-row class="h-10 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-500 transition hover:bg-red-50 hover:text-red-500">✕</button>
+                    </div>
+                </template>
+            </div>
         </div>
         <div class="mt-6 flex justify-between">
             <button type="submit" class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow hover:bg-primary/90">Saqlash</button>
@@ -695,51 +788,141 @@ $redirectQuery = http_build_query($filters + ($teacherFilter ? ['teacher_id' => 
 </dialog>
 
 <script>
-const dialogs = document.querySelectorAll('dialog');
 const formatNumber = value => new Intl.NumberFormat('uz-UZ').format(value);
+const defaultDateValue = '<?= htmlspecialchars($filters['end_date']) ?>';
+
+const teacherDialog = document.getElementById('teacherDialog');
+const sessionDialog = document.getElementById('sessionDialog');
+const payoutDialog = document.getElementById('payoutDialog');
+
+let sessionTeacherSelect = null;
+let sessionPercentageInput = null;
+let sessionActionInput = null;
+let sessionRowsContainer = null;
+let sessionSummary = null;
+let sessionTemplate = null;
+let sessionAddButton = null;
+
+if (sessionDialog) {
+    sessionTeacherSelect = sessionDialog.querySelector('select[name="teacher_id"]');
+    sessionPercentageInput = sessionDialog.querySelector('input[name="teacher_percentage"]');
+    sessionActionInput = sessionDialog.querySelector('input[name="action"]');
+    sessionRowsContainer = sessionDialog.querySelector('[data-student-rows]');
+    sessionSummary = sessionDialog.querySelector('[data-student-summary]');
+    sessionTemplate = sessionDialog.querySelector('#studentRowTemplate');
+    sessionAddButton = sessionDialog.querySelector('[data-add-student]');
+}
+
+function recalcSessionTotals() {
+    if (!sessionRowsContainer || !sessionSummary) return;
+    let total = 0;
+    sessionRowsContainer.querySelectorAll('[data-student-row]').forEach(row => {
+        const amountInput = row.querySelector('[data-student-amount]');
+        const value = parseFloat(amountInput?.value || '0');
+        if (!Number.isNaN(value)) {
+            total += value;
+        }
+    });
+    const percentage = parseFloat(sessionPercentageInput?.value || '0');
+    const share = total * (percentage / 100);
+    sessionSummary.textContent = `Jami to'lov: ${formatNumber(Math.round(total))} so'm · O'qituvchi ulushi: ${formatNumber(Math.round(share))} so'm`;
+}
+
+function addStudentRow(student = { name: '', amount: '' }) {
+    if (!sessionRowsContainer || !sessionTemplate) return;
+    const rowElement = sessionTemplate.content.firstElementChild.cloneNode(true);
+    const nameInput = rowElement.querySelector('[data-student-name]');
+    const amountInput = rowElement.querySelector('[data-student-amount]');
+    const removeButton = rowElement.querySelector('[data-remove-row]');
+    if (nameInput) {
+        nameInput.value = student.name ?? '';
+    }
+    if (amountInput) {
+        amountInput.value = student.amount !== undefined && student.amount !== null && student.amount !== '' ? student.amount : '';
+        amountInput.addEventListener('input', recalcSessionTotals);
+    }
+    removeButton?.addEventListener('click', () => {
+        if (!sessionRowsContainer) return;
+        const rows = sessionRowsContainer.querySelectorAll('[data-student-row]');
+        if (rows.length <= 1) {
+            if (nameInput) nameInput.value = '';
+            if (amountInput) amountInput.value = '';
+            recalcSessionTotals();
+            return;
+        }
+        rowElement.remove();
+        recalcSessionTotals();
+    });
+    sessionRowsContainer.appendChild(rowElement);
+}
+
+function resetSessionStudents(students = []) {
+    if (!sessionRowsContainer) return;
+    sessionRowsContainer.innerHTML = '';
+    const payload = Array.isArray(students) && students.length ? students : [{ name: '', amount: '' }];
+    payload.forEach(item => addStudentRow(item));
+    recalcSessionTotals();
+}
+
+function resetDialog(dialog, trigger = null) {
+    dialog.querySelectorAll('input[name], textarea[name], select[name]').forEach(el => {
+        if (el.name === 'action') {
+            el.value = 'create';
+        } else if (['session_id', 'teacher_id', 'payout_id'].includes(el.name)) {
+            if (el.tagName === 'SELECT') {
+                el.selectedIndex = 0;
+            } else {
+                el.value = '';
+            }
+        } else if (el.type === 'number') {
+            el.value = '';
+        } else if (el.type === 'date') {
+            el.value = defaultDateValue;
+        } else if (el.type === 'radio') {
+            el.checked = el.value === 'cash';
+        } else if (el.tagName === 'TEXTAREA') {
+            el.value = '';
+        } else {
+            el.value = '';
+        }
+    });
+    const deleteButton = dialog.querySelector('[data-delete]');
+    if (deleteButton) {
+        deleteButton.classList.add('hidden');
+    }
+
+    if (dialog === sessionDialog) {
+        resetSessionStudents();
+        if (sessionTeacherSelect) {
+            if (trigger?.dataset.sessionTeacher) {
+                sessionTeacherSelect.value = trigger.dataset.sessionTeacher;
+            }
+            const selectedOption = sessionTeacherSelect.selectedOptions[0];
+            if (trigger?.dataset.sessionPercentage) {
+                sessionPercentageInput.value = trigger.dataset.sessionPercentage;
+            } else if (selectedOption?.dataset.percentage) {
+                sessionPercentageInput.value = selectedOption.dataset.percentage;
+            } else if (sessionPercentageInput) {
+                sessionPercentageInput.value = '';
+            }
+        }
+        recalcSessionTotals();
+    }
+
+    if (dialog === payoutDialog && trigger?.dataset.payoutTeacher) {
+        const payoutTeacherSelect = payoutDialog.querySelector('select[name="teacher_id"]');
+        if (payoutTeacherSelect) {
+            payoutTeacherSelect.value = trigger.dataset.payoutTeacher;
+        }
+    }
+}
 
 document.querySelectorAll('[data-open]').forEach(button => {
     button.addEventListener('click', () => {
         const targetId = button.getAttribute('data-open');
         const dialog = document.getElementById(targetId);
         if (!dialog) return;
-        dialog.querySelectorAll('input[name], textarea[name], select[name]').forEach(el => {
-            if (el.name === 'action') {
-                el.value = 'create';
-            } else if (['session_id', 'teacher_id', 'payout_id'].includes(el.name)) {
-                if (el.tagName === 'SELECT') {
-                    el.selectedIndex = 0;
-                } else {
-                    el.value = '';
-                }
-            } else if (el.type === 'number') {
-                el.value = '';
-            } else if (el.type === 'date') {
-                el.value = '<?= htmlspecialchars($filters['end_date']) ?>';
-            } else if (el.type === 'radio') {
-                el.checked = el.value === 'cash';
-            } else if (el.tagName === 'TEXTAREA') {
-                el.value = '';
-            } else {
-                el.value = '';
-            }
-        });
-        const deleteButton = dialog.querySelector('[data-delete]');
-        if (deleteButton) {
-            deleteButton.classList.add('hidden');
-        }
-        if (targetId === 'sessionDialog' && button.dataset.sessionTeacher) {
-            const select = dialog.querySelector('select[name="teacher_id"]');
-            select.value = button.dataset.sessionTeacher;
-            const percentageInput = dialog.querySelector('input[name="teacher_percentage"]');
-            if (button.dataset.sessionPercentage) {
-                percentageInput.value = button.dataset.sessionPercentage;
-            }
-        }
-        if (targetId === 'payoutDialog' && button.dataset.payoutTeacher) {
-            const select = dialog.querySelector('select[name="teacher_id"]');
-            select.value = button.dataset.payoutTeacher;
-        }
+        resetDialog(dialog, button);
         dialog.showModal();
     });
 });
@@ -747,82 +930,94 @@ document.querySelectorAll('[data-open]').forEach(button => {
 document.querySelectorAll('[data-close]').forEach(button => {
     button.addEventListener('click', () => {
         const dialog = button.closest('dialog');
-        if (dialog) dialog.close();
+        dialog?.close();
     });
 });
 
-const sessionDialog = document.getElementById('sessionDialog');
-if (sessionDialog) {
-    const teacherSelect = sessionDialog.querySelector('select[name="teacher_id"]');
-    const percentageInput = sessionDialog.querySelector('input[name="teacher_percentage"]');
-    const actionInput = sessionDialog.querySelector('input[name="action"]');
-    teacherSelect?.addEventListener('change', () => {
-        const option = teacherSelect.selectedOptions[0];
+if (sessionTeacherSelect) {
+    sessionTeacherSelect.addEventListener('change', () => {
+        const option = sessionTeacherSelect.selectedOptions[0];
         if (!option) return;
         const defaultPercentage = option.dataset.percentage;
         if (!defaultPercentage) return;
-        if ((actionInput?.value ?? 'create') !== 'update' || percentageInput.value === '') {
-            percentageInput.value = defaultPercentage;
+        if ((sessionActionInput?.value ?? 'create') !== 'update' || sessionPercentageInput.value === '') {
+            sessionPercentageInput.value = defaultPercentage;
         }
+        recalcSessionTotals();
     });
 }
 
+sessionPercentageInput?.addEventListener('input', recalcSessionTotals);
+sessionAddButton?.addEventListener('click', () => {
+    addStudentRow();
+    recalcSessionTotals();
+});
+
 document.querySelectorAll('[data-edit-teacher]').forEach(button => {
     button.addEventListener('click', () => {
+        if (!teacherDialog) return;
+        resetDialog(teacherDialog);
         const data = JSON.parse(button.getAttribute('data-edit-teacher'));
-        const dialog = document.getElementById('teacherDialog');
-        dialog.showModal();
-        dialog.querySelector('input[name="action"]').value = 'update';
-        dialog.querySelector('input[name="teacher_id"]').value = data.id;
-        dialog.querySelector('input[name="name"]').value = data.name || '';
-        dialog.querySelector('input[name="percentage"]').value = data.percentage || '';
-        dialog.querySelector('input[name="phone"]').value = data.phone || '';
-        dialog.querySelector('textarea[name="note"]').value = data.note || '';
-        const deleteButton = dialog.querySelector('[data-delete]');
-        if (deleteButton) {
-            deleteButton.classList.remove('hidden');
-        }
+        teacherDialog.querySelector('input[name="action"]').value = 'update';
+        teacherDialog.querySelector('input[name="teacher_id"]').value = data.id;
+        teacherDialog.querySelector('input[name="name"]').value = data.name || '';
+        teacherDialog.querySelector('input[name="percentage"]').value = data.percentage || '';
+        teacherDialog.querySelector('input[name="phone"]').value = data.phone || '';
+        teacherDialog.querySelector('textarea[name="note"]').value = data.note || '';
+        const deleteButton = teacherDialog.querySelector('[data-delete]');
+        deleteButton?.classList.remove('hidden');
+        teacherDialog.showModal();
     });
 });
 
 document.querySelectorAll('[data-edit-session]').forEach(button => {
     button.addEventListener('click', () => {
+        if (!sessionDialog) return;
         const data = JSON.parse(button.getAttribute('data-edit-session'));
-        const dialog = document.getElementById('sessionDialog');
-        dialog.showModal();
-        dialog.querySelector('input[name="action"]').value = 'update';
-        dialog.querySelector('input[name="session_id"]').value = data.id;
-        dialog.querySelector('select[name="teacher_id"]').value = data.teacher_id;
-        dialog.querySelector('input[name="session_date"]').value = data.session_date;
-        dialog.querySelector('input[name="group_name"]').value = data.group_name;
-        dialog.querySelector('input[name="student_name"]').value = data.student_name || '';
-        dialog.querySelector('input[name="amount"]').value = data.amount;
-        dialog.querySelector('input[name="teacher_percentage"]').value = data.teacher_percentage;
-        const deleteButton = dialog.querySelector('[data-delete]');
-        if (deleteButton) {
-            deleteButton.classList.remove('hidden');
+        resetDialog(sessionDialog);
+        sessionDialog.querySelector('input[name="action"]').value = 'update';
+        sessionDialog.querySelector('input[name="session_id"]').value = data.id;
+        if (sessionTeacherSelect) {
+            sessionTeacherSelect.value = data.teacher_id;
         }
+        sessionDialog.querySelector('input[name="session_date"]').value = data.session_date;
+        sessionDialog.querySelector('input[name="group_name"]').value = data.group_name || '';
+        if (sessionPercentageInput) {
+            sessionPercentageInput.value = data.teacher_percentage ?? '';
+        }
+        const studentPayload = Array.isArray(data.students) && data.students.length
+            ? data.students
+            : (data.student_name || data.amount
+                ? [{ name: data.student_name || '', amount: data.amount }]
+                : []);
+        resetSessionStudents(studentPayload);
+        if (sessionActionInput) {
+            sessionActionInput.value = 'update';
+        }
+        const deleteButton = sessionDialog.querySelector('[data-delete]');
+        deleteButton?.classList.remove('hidden');
+        recalcSessionTotals();
+        sessionDialog.showModal();
     });
 });
 
 document.querySelectorAll('[data-edit-payout]').forEach(button => {
     button.addEventListener('click', () => {
+        if (!payoutDialog) return;
+        resetDialog(payoutDialog);
         const data = JSON.parse(button.getAttribute('data-edit-payout'));
-        const dialog = document.getElementById('payoutDialog');
-        dialog.showModal();
-        dialog.querySelector('input[name="action"]').value = 'update';
-        dialog.querySelector('input[name="payout_id"]').value = data.id;
-        dialog.querySelector('select[name="teacher_id"]').value = data.teacher_id;
-        dialog.querySelector('input[name="paid_at"]').value = data.paid_at;
-        dialog.querySelector('input[name="amount"]').value = data.amount;
-        dialog.querySelectorAll('input[name="payment_method"]').forEach(radio => {
+        payoutDialog.querySelector('input[name="action"]').value = 'update';
+        payoutDialog.querySelector('input[name="payout_id"]').value = data.id;
+        payoutDialog.querySelector('select[name="teacher_id"]').value = data.teacher_id;
+        payoutDialog.querySelector('input[name="paid_at"]').value = data.paid_at;
+        payoutDialog.querySelector('input[name="amount"]').value = data.amount;
+        payoutDialog.querySelectorAll('input[name="payment_method"]').forEach(radio => {
             radio.checked = radio.value === data.payment_method;
         });
-        dialog.querySelector('textarea[name="note"]').value = data.note || '';
-        const deleteButton = dialog.querySelector('[data-delete]');
-        if (deleteButton) {
-            deleteButton.classList.remove('hidden');
-        }
+        payoutDialog.querySelector('textarea[name="note"]').value = data.note || '';
+        const deleteButton = payoutDialog.querySelector('[data-delete]');
+        deleteButton?.classList.remove('hidden');
+        payoutDialog.showModal();
     });
 });
 
@@ -894,6 +1089,10 @@ if (ctx) {
                         label: context => `${context.dataset.label}: ${formatNumber(context.parsed.y ?? 0)} so'm`
                     }
                 }
+            },
+            interaction: {
+                intersect: false,
+                mode: 'index'
             },
             scales: {
                 y: {
