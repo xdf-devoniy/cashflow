@@ -329,6 +329,9 @@ if ($categoryBreakdownStmt) {
     $categoryBreakdownStmt->close();
 }
 $topCategory = $categoryBreakdown[0] ?? ['name' => 'Ma\'lumot yo\'q', 'total' => 0.0];
+$categoryChartLabels = array_column($categoryBreakdown, 'name');
+$categoryChartTotals = array_map('floatval', array_column($categoryBreakdown, 'total'));
+$categoryChartHasData = array_sum($categoryChartTotals) > 0;
 
 $periodStart = (new DateTime($reportRange['start']))->modify('first day of this month');
 $periodEnd = (new DateTime($reportRange['end']))->modify('first day of next month');
@@ -570,7 +573,7 @@ function uzs(float $value): string
                         <p class="mt-4 text-xs text-slate-400">Eng ko'p xarajat turi: <?= htmlspecialchars($topCategory['name'], ENT_QUOTES) ?></p>
                     </div>
                 </div>
-                <div class="grid gap-6 lg:grid-cols-2">
+                <div class="grid gap-6 lg:grid-cols-3">
                     <div class="rounded-3xl border border-white/80 bg-white/90 p-6 shadow-lg shadow-slate-200/70">
                         <h2 class="text-lg font-semibold text-slate-900">Daromadlar taqsimoti</h2>
                         <p class="text-sm text-slate-500">Naqd va Click ulushi</p>
@@ -580,6 +583,14 @@ function uzs(float $value): string
                         <h2 class="text-lg font-semibold text-slate-900">Xarajatlar taqsimoti</h2>
                         <p class="text-sm text-slate-500">Naqd va Click ulushi</p>
                         <canvas id="expenseMethodChart" class="mt-6 h-56 w-full"></canvas>
+                    </div>
+                    <div class="rounded-3xl border border-white/80 bg-white/90 p-6 shadow-lg shadow-slate-200/70">
+                        <h2 class="text-lg font-semibold text-slate-900">Turkumlar kesimi</h2>
+                        <p class="text-sm text-slate-500">Qaysi yo'nalishlarga ko'proq xarajat qilinyapti</p>
+                        <canvas id="expenseCategoryChart" data-has-data="<?= $categoryChartHasData ? '1' : '0' ?>" class="mt-6 h-56 w-full <?= $categoryChartHasData ? '' : 'hidden' ?>"></canvas>
+                        <?php if (!$categoryChartHasData): ?>
+                            <p class="mt-6 text-sm text-slate-500">Hozircha turkumlar bo'yicha xarajat ma'lumotlari mavjud emas.</p>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -955,7 +966,7 @@ function uzs(float $value): string
         </section>
     </main>
 
-    <div id="incomeCreateModal" class="modal fixed inset-0 z-40 hidden items-center justify-center bg-slate-900/40 px-4 py-8">
+    <div id="incomeCreateModal" class="modal fixed inset-0 z-40 hidden flex items-center justify-center bg-slate-900/40 px-4 py-8">
         <div class="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
             <div class="flex items-center justify-between">
                 <h3 class="text-lg font-semibold text-slate-900">Yangi daromad</h3>
@@ -991,7 +1002,7 @@ function uzs(float $value): string
         </div>
     </div>
 
-    <div id="incomeModal" class="modal fixed inset-0 z-40 hidden items-center justify-center bg-slate-900/40 px-4 py-8">
+    <div id="incomeModal" class="modal fixed inset-0 z-40 hidden flex items-center justify-center bg-slate-900/40 px-4 py-8">
         <div class="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
             <div class="flex items-center justify-between">
                 <h3 class="text-lg font-semibold text-slate-900">Daromadni tahrirlash</h3>
@@ -1029,7 +1040,7 @@ function uzs(float $value): string
         </div>
     </div>
 
-    <div id="expenseCreateModal" class="modal fixed inset-0 z-40 hidden items-center justify-center bg-slate-900/40 px-4 py-8">
+    <div id="expenseCreateModal" class="modal fixed inset-0 z-40 hidden flex items-center justify-center bg-slate-900/40 px-4 py-8">
         <div class="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
             <div class="flex items-center justify-between">
                 <h3 class="text-lg font-semibold text-slate-900">Yangi xarajat</h3>
@@ -1077,7 +1088,7 @@ function uzs(float $value): string
         </div>
     </div>
 
-    <div id="expenseModal" class="modal fixed inset-0 z-40 hidden items-center justify-center bg-slate-900/40 px-4 py-8">
+    <div id="expenseModal" class="modal fixed inset-0 z-40 hidden flex items-center justify-center bg-slate-900/40 px-4 py-8">
         <div class="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
             <div class="flex items-center justify-between">
                 <h3 class="text-lg font-semibold text-slate-900">Xarajatni tahrirlash</h3>
@@ -1124,7 +1135,7 @@ function uzs(float $value): string
         </div>
     </div>
 
-    <div id="categoryModal" class="modal fixed inset-0 z-40 hidden items-center justify-center bg-slate-900/40 px-4 py-8">
+    <div id="categoryModal" class="modal fixed inset-0 z-40 hidden flex items-center justify-center bg-slate-900/40 px-4 py-8">
         <div class="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
             <div class="flex items-center justify-between">
                 <h3 id="category-modal-title" class="text-lg font-semibold text-slate-900">Turkumni tahrirlash</h3>
@@ -1378,6 +1389,31 @@ function uzs(float $value): string
                         datasets: [{
                             data: [<?= (float) $expenseTotals['cash'] ?>, <?= (float) $expenseTotals['click'] ?>],
                             backgroundColor: ['#f59e0b', '#f97316'],
+                            borderWidth: 0,
+                        }],
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { position: 'bottom' },
+                        },
+                    },
+                });
+            }
+
+            const expenseCategoryCtx = document.getElementById('expenseCategoryChart');
+            if (expenseCategoryCtx && expenseCategoryCtx.dataset.hasData === '1') {
+                const categoryLabels = <?= json_encode($categoryChartLabels, JSON_UNESCAPED_UNICODE) ?>;
+                const categoryValues = <?= json_encode($categoryChartTotals, JSON_UNESCAPED_UNICODE) ?>;
+                const palette = ['#2563eb', '#38bdf8', '#f97316', '#f59e0b', '#16a34a', '#f43f5e', '#8b5cf6', '#ec4899', '#14b8a6', '#6366f1'];
+                const backgroundColors = categoryLabels.map((_, index) => palette[index % palette.length]);
+                new Chart(expenseCategoryCtx, {
+                    type: 'pie',
+                    data: {
+                        labels: categoryLabels,
+                        datasets: [{
+                            data: categoryValues,
+                            backgroundColor: backgroundColors,
                             borderWidth: 0,
                         }],
                     },

@@ -1,7 +1,19 @@
 <?php
 session_start();
 
-const AUTH_PASSWORD = 'Rasul777';
+const DEFAULT_AUTH_PASSWORD_HASH = '$2y$12$ETU4HddbbnKlf0.x/7wDw.Af.hNg7EAutq85A4KUSCDRFie7MSN36';
+
+$authPasswordHash = getenv('CASHFLOW_PASSWORD_HASH');
+if (!$authPasswordHash) {
+    $envPassword = getenv('CASHFLOW_PASSWORD');
+    if ($envPassword !== false && $envPassword !== '') {
+        $authPasswordHash = password_hash($envPassword, PASSWORD_DEFAULT);
+    }
+}
+
+if (!$authPasswordHash) {
+    $authPasswordHash = DEFAULT_AUTH_PASSWORD_HASH;
+}
 
 $authError = null;
 $redirectKey = isset($_GET['redirect']) ? (string) $_GET['redirect'] : '';
@@ -9,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $redirectKey = isset($_POST['redirect']) ? (string) $_POST['redirect'] : $redirectKey;
     $submittedPassword = trim((string) ($_POST['password'] ?? ''));
     if ($submittedPassword !== '') {
-        if (hash_equals(AUTH_PASSWORD, $submittedPassword)) {
+        if (password_verify($submittedPassword, $authPasswordHash)) {
             $_SESSION['authenticated'] = true;
 
             $redirectMap = [
