@@ -12,8 +12,15 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 require_once '../db.php';
+require_once __DIR__ . '/bootstrap.php';
 
 date_default_timezone_set('Asia/Tashkent');
+
+try {
+    ensure_teacher_tables($conn);
+} catch (Throwable $exception) {
+    flash_redirect("Bazani tayyorlashda xatolik: " . $exception->getMessage(), 'danger', $redirectPath);
+}
 
 $action = $_POST['action'] ?? '';
 $redirectQuery = trim($_POST['redirect_query'] ?? '');

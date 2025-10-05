@@ -7,56 +7,16 @@ if (!isset($_SESSION['authenticated']) || $_SESSION['authenticated'] !== true) {
 }
 
 require_once '../db.php';
+require_once __DIR__ . '/bootstrap.php';
 
 date_default_timezone_set('Asia/Tashkent');
 
-// Ensure teacher tables exist
-$conn->query("CREATE TABLE IF NOT EXISTS teacher_profiles (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    percentage DECIMAL(5,2) NOT NULL DEFAULT 0,
-    phone VARCHAR(100) DEFAULT NULL,
-    note TEXT DEFAULT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NULL DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-
-$conn->query("CREATE TABLE IF NOT EXISTS teacher_sessions (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    teacher_id INT NOT NULL,
-    session_date DATE NOT NULL,
-    group_name VARCHAR(255) NOT NULL,
-    student_name VARCHAR(255) DEFAULT NULL,
-    amount DECIMAL(12,2) NOT NULL,
-    teacher_percentage DECIMAL(5,2) NOT NULL,
-    teacher_share DECIMAL(12,2) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NULL DEFAULT NULL,
-    CONSTRAINT fk_teacher_sessions_teacher FOREIGN KEY (teacher_id) REFERENCES teacher_profiles(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-
-$conn->query("CREATE TABLE IF NOT EXISTS teacher_payouts (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    teacher_id INT NOT NULL,
-    paid_at DATE NOT NULL,
-    amount DECIMAL(12,2) NOT NULL,
-    payment_method VARCHAR(20) NOT NULL DEFAULT 'cash',
-    note VARCHAR(255) DEFAULT NULL,
-    transaction_id INT DEFAULT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NULL DEFAULT NULL,
-    CONSTRAINT fk_teacher_payouts_teacher FOREIGN KEY (teacher_id) REFERENCES teacher_profiles(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-
-$conn->query("CREATE TABLE IF NOT EXISTS teacher_session_students (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    session_id INT NOT NULL,
-    student_name VARCHAR(255) NOT NULL,
-    amount DECIMAL(12,2) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NULL DEFAULT NULL,
-    CONSTRAINT fk_session_student_session FOREIGN KEY (session_id) REFERENCES teacher_sessions(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+$bootstrapError = null;
+try {
+    ensure_teacher_tables($conn);
+} catch (Throwable $exception) {
+    $bootstrapError = $exception->getMessage();
+}
 
 function format_money(float $value): string
 {
@@ -111,197 +71,201 @@ $rangeSummary = [
     'total_payout' => 0,
 ];
 
-$rangeStmt = $conn->prepare("SELECT IFNULL(SUM(amount), 0) AS total_amount, IFNULL(SUM(teacher_share), 0) AS total_share FROM teacher_sessions WHERE session_date BETWEEN ? AND ?");
-if ($rangeStmt) {
-    $rangeStmt->bind_param('ss', $rangeStartStr, $rangeEndStr);
-    if ($rangeStmt->execute()) {
-        $rangeResult = $rangeStmt->get_result()->fetch_assoc();
-        $rangeSummary['total_amount'] = (float) ($rangeResult['total_amount'] ?? 0);
-        $rangeSummary['total_share'] = (float) ($rangeResult['total_share'] ?? 0);
-        $rangeSummary['total_profit'] = $rangeSummary['total_amount'] - $rangeSummary['total_share'];
-    }
-    $rangeStmt->close();
-}
-
-$payoutSummaryStmt = $conn->prepare("SELECT IFNULL(SUM(amount), 0) AS total_payout FROM teacher_payouts WHERE paid_at BETWEEN ? AND ?");
-if ($payoutSummaryStmt) {
-    $payoutSummaryStmt->bind_param('ss', $rangeStartStr, $rangeEndStr);
-    if ($payoutSummaryStmt->execute()) {
-        $payoutSummary = $payoutSummaryStmt->get_result()->fetch_assoc();
-        $rangeSummary['total_payout'] = (float) ($payoutSummary['total_payout'] ?? 0);
-    }
-    $payoutSummaryStmt->close();
-}
-
 $teacherMetrics = [];
-$teacherQuery = $conn->prepare(
-    "SELECT t.id, t.name, t.percentage, t.phone, t.note,
-            IFNULL(r.total_amount, 0) AS range_amount,
-            IFNULL(r.total_share, 0) AS range_share,
-            IFNULL(r.total_profit, 0) AS range_profit,
-            IFNULL(p_range.total_payout, 0) AS range_payout,
-            IFNULL(all_sessions.total_amount_all, 0) AS total_amount_all,
-            IFNULL(all_sessions.total_share_all, 0) AS total_share_all,
-            IFNULL(all_payouts.total_payout_all, 0) AS total_payout_all
-     FROM teacher_profiles t
-     LEFT JOIN (
-        SELECT teacher_id, SUM(amount) AS total_amount, SUM(teacher_share) AS total_share, SUM(amount - teacher_share) AS total_profit
-        FROM teacher_sessions
-        WHERE session_date BETWEEN ? AND ?
-        GROUP BY teacher_id
-     ) AS r ON r.teacher_id = t.id
-     LEFT JOIN (
-        SELECT teacher_id, SUM(amount) AS total_payout
-        FROM teacher_payouts
-        WHERE paid_at BETWEEN ? AND ?
-        GROUP BY teacher_id
-     ) AS p_range ON p_range.teacher_id = t.id
-     LEFT JOIN (
-        SELECT teacher_id, SUM(amount) AS total_amount_all, SUM(teacher_share) AS total_share_all
-        FROM teacher_sessions
-        GROUP BY teacher_id
-     ) AS all_sessions ON all_sessions.teacher_id = t.id
-     LEFT JOIN (
-        SELECT teacher_id, SUM(amount) AS total_payout_all
-        FROM teacher_payouts
-        GROUP BY teacher_id
-     ) AS all_payouts ON all_payouts.teacher_id = t.id
-     ORDER BY t.name"
-);
-
-if ($teacherQuery) {
-    $teacherQuery->bind_param('ssss', $rangeStartStr, $rangeEndStr, $rangeStartStr, $rangeEndStr);
-    if ($teacherQuery->execute()) {
-        $teacherMetrics = $teacherQuery->get_result()->fetch_all(MYSQLI_ASSOC);
-    }
-    $teacherQuery->close();
-}
-
 $sessionRows = [];
-$sessionSql = "SELECT s.id, s.teacher_id, s.session_date, s.group_name, s.student_name, s.amount, s.teacher_percentage, s.teacher_share, t.name AS teacher_name
+$sessionStudentsMap = [];
+$payoutRows = [];
+$monthlySessions = [];
+$monthlyPayouts = [];
+
+$monthStart = (new DateTime('first day of -5 month'))->format('Y-m-01');
+$monthEnd = date('Y-m-t');
+
+if ($bootstrapError === null) {
+    $rangeStmt = $conn->prepare("SELECT IFNULL(SUM(amount), 0) AS total_amount, IFNULL(SUM(teacher_share), 0) AS total_share FROM teacher_sessions WHERE session_date BETWEEN ? AND ?");
+    if ($rangeStmt) {
+        $rangeStmt->bind_param('ss', $rangeStartStr, $rangeEndStr);
+        if ($rangeStmt->execute()) {
+            $rangeResult = $rangeStmt->get_result()->fetch_assoc();
+            $rangeSummary['total_amount'] = (float) ($rangeResult['total_amount'] ?? 0);
+            $rangeSummary['total_share'] = (float) ($rangeResult['total_share'] ?? 0);
+            $rangeSummary['total_profit'] = $rangeSummary['total_amount'] - $rangeSummary['total_share'];
+        }
+        $rangeStmt->close();
+    }
+
+    $payoutSummaryStmt = $conn->prepare("SELECT IFNULL(SUM(amount), 0) AS total_payout FROM teacher_payouts WHERE paid_at BETWEEN ? AND ?");
+    if ($payoutSummaryStmt) {
+        $payoutSummaryStmt->bind_param('ss', $rangeStartStr, $rangeEndStr);
+        if ($payoutSummaryStmt->execute()) {
+            $payoutSummary = $payoutSummaryStmt->get_result()->fetch_assoc();
+            $rangeSummary['total_payout'] = (float) ($payoutSummary['total_payout'] ?? 0);
+        }
+        $payoutSummaryStmt->close();
+    }
+
+    $teacherQuery = $conn->prepare(
+        "SELECT t.id, t.name, t.percentage, t.phone, t.note,
+                IFNULL(r.total_amount, 0) AS range_amount,
+                IFNULL(r.total_share, 0) AS range_share,
+                IFNULL(r.total_profit, 0) AS range_profit,
+                IFNULL(p_range.total_payout, 0) AS range_payout,
+                IFNULL(all_sessions.total_amount_all, 0) AS total_amount_all,
+                IFNULL(all_sessions.total_share_all, 0) AS total_share_all,
+                IFNULL(all_payouts.total_payout_all, 0) AS total_payout_all
+         FROM teacher_profiles t
+         LEFT JOIN (
+            SELECT teacher_id, SUM(amount) AS total_amount, SUM(teacher_share) AS total_share, SUM(amount - teacher_share) AS total_profit
+            FROM teacher_sessions
+            WHERE session_date BETWEEN ? AND ?
+            GROUP BY teacher_id
+         ) AS r ON r.teacher_id = t.id
+         LEFT JOIN (
+            SELECT teacher_id, SUM(amount) AS total_payout
+            FROM teacher_payouts
+            WHERE paid_at BETWEEN ? AND ?
+            GROUP BY teacher_id
+         ) AS p_range ON p_range.teacher_id = t.id
+         LEFT JOIN (
+            SELECT teacher_id, SUM(amount) AS total_amount_all, SUM(teacher_share) AS total_share_all
+            FROM teacher_sessions
+            GROUP BY teacher_id
+         ) AS all_sessions ON all_sessions.teacher_id = t.id
+         LEFT JOIN (
+            SELECT teacher_id, SUM(amount) AS total_payout_all
+            FROM teacher_payouts
+            GROUP BY teacher_id
+         ) AS all_payouts ON all_payouts.teacher_id = t.id
+         ORDER BY t.name"
+    );
+
+    if ($teacherQuery) {
+        $teacherQuery->bind_param('ssss', $rangeStartStr, $rangeEndStr, $rangeStartStr, $rangeEndStr);
+        if ($teacherQuery->execute()) {
+            $teacherMetrics = $teacherQuery->get_result()->fetch_all(MYSQLI_ASSOC);
+        }
+        $teacherQuery->close();
+    }
+
+    $sessionSql = "SELECT s.id, s.teacher_id, s.session_date, s.group_name, s.student_name, s.amount, s.teacher_percentage, s.teacher_share, t.name AS teacher_name
                FROM teacher_sessions s
                JOIN teacher_profiles t ON t.id = s.teacher_id
                WHERE s.session_date BETWEEN ? AND ?";
-$params = [$rangeStartStr, $rangeEndStr];
-$types = 'ss';
+    $params = [$rangeStartStr, $rangeEndStr];
+    $types = 'ss';
 
-if ($teacherFilter > 0) {
-    $sessionSql .= " AND s.teacher_id = ?";
-    $params[] = $teacherFilter;
-    $types .= 'i';
-}
-
-$sessionSql .= " ORDER BY s.session_date DESC, s.id DESC";
-
-$sessionStmt = $conn->prepare($sessionSql);
-if ($sessionStmt) {
-    $sessionStmt->bind_param($types, ...$params);
-    if ($sessionStmt->execute()) {
-        $sessionRows = $sessionStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    if ($teacherFilter > 0) {
+        $sessionSql .= " AND s.teacher_id = ?";
+        $params[] = $teacherFilter;
+        $types .= 'i';
     }
-    $sessionStmt->close();
-}
 
-$sessionStudentsMap = [];
-if ($sessionRows) {
-    $sessionIds = array_map('intval', array_column($sessionRows, 'id'));
-    if ($sessionIds) {
-        $placeholders = implode(',', array_fill(0, count($sessionIds), '?'));
-        $studentSql = "SELECT session_id, student_name, amount FROM teacher_session_students WHERE session_id IN ($placeholders) ORDER BY id";
-        $studentStmt = $conn->prepare($studentSql);
-        if ($studentStmt) {
-            $types = str_repeat('i', count($sessionIds));
-            $bindParams = [$types];
-            foreach ($sessionIds as $index => $sessionId) {
-                $bindParams[] = $sessionIds[$index];
-            }
-            $refParams = [];
-            foreach ($bindParams as $key => $value) {
-                $refParams[$key] = &$bindParams[$key];
-            }
-            call_user_func_array([$studentStmt, 'bind_param'], $refParams);
-            if ($studentStmt->execute()) {
-                $studentResult = $studentStmt->get_result();
-                while ($studentRow = $studentResult->fetch_assoc()) {
-                    $sessionId = (int) $studentRow['session_id'];
-                    if (!isset($sessionStudentsMap[$sessionId])) {
-                        $sessionStudentsMap[$sessionId] = [];
-                    }
-                    $sessionStudentsMap[$sessionId][] = [
-                        'student_name' => $studentRow['student_name'],
-                        'amount' => (float) ($studentRow['amount'] ?? 0),
-                    ];
+    $sessionSql .= " ORDER BY s.session_date DESC, s.id DESC";
+
+    $sessionStmt = $conn->prepare($sessionSql);
+    if ($sessionStmt) {
+        $sessionStmt->bind_param($types, ...$params);
+        if ($sessionStmt->execute()) {
+            $sessionRows = $sessionStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        }
+        $sessionStmt->close();
+    }
+
+    if ($sessionRows) {
+        $sessionIds = array_map('intval', array_column($sessionRows, 'id'));
+        if ($sessionIds) {
+            $placeholders = implode(',', array_fill(0, count($sessionIds), '?'));
+            $studentSql = "SELECT session_id, student_name, amount FROM teacher_session_students WHERE session_id IN ($placeholders) ORDER BY id";
+            $studentStmt = $conn->prepare($studentSql);
+            if ($studentStmt) {
+                $types = str_repeat('i', count($sessionIds));
+                $bindParams = [$types];
+                foreach ($sessionIds as $index => $sessionId) {
+                    $bindParams[] = $sessionIds[$index];
                 }
+                $refParams = [];
+                foreach ($bindParams as $key => $value) {
+                    $refParams[$key] = &$bindParams[$key];
+                }
+                call_user_func_array([$studentStmt, 'bind_param'], $refParams);
+                if ($studentStmt->execute()) {
+                    $studentResult = $studentStmt->get_result();
+                    while ($studentRow = $studentResult->fetch_assoc()) {
+                        $sessionId = (int) $studentRow['session_id'];
+                        if (!isset($sessionStudentsMap[$sessionId])) {
+                            $sessionStudentsMap[$sessionId] = [];
+                        }
+                        $sessionStudentsMap[$sessionId][] = [
+                            'student_name' => $studentRow['student_name'],
+                            'amount' => (float) ($studentRow['amount'] ?? 0),
+                        ];
+                    }
+                }
+                $studentStmt->close();
             }
-            $studentStmt->close();
         }
     }
-}
 
-$payoutRows = [];
-$payoutSql = "SELECT p.id, p.teacher_id, p.paid_at, p.amount, p.payment_method, p.note, p.transaction_id, t.name AS teacher_name
+    $payoutSql = "SELECT p.id, p.teacher_id, p.paid_at, p.amount, p.payment_method, p.note, p.transaction_id, t.name AS teacher_name
                FROM teacher_payouts p
                JOIN teacher_profiles t ON t.id = p.teacher_id
                WHERE p.paid_at BETWEEN ? AND ?";
-$params = [$rangeStartStr, $rangeEndStr];
-$types = 'ss';
-if ($teacherFilter > 0) {
-    $payoutSql .= " AND p.teacher_id = ?";
-    $params[] = $teacherFilter;
-    $types .= 'i';
-}
-$payoutSql .= " ORDER BY p.paid_at DESC, p.id DESC";
-
-$payoutStmt = $conn->prepare($payoutSql);
-if ($payoutStmt) {
-    $payoutStmt->bind_param($types, ...$params);
-    if ($payoutStmt->execute()) {
-        $payoutRows = $payoutStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $params = [$rangeStartStr, $rangeEndStr];
+    $types = 'ss';
+    if ($teacherFilter > 0) {
+        $payoutSql .= " AND p.teacher_id = ?";
+        $params[] = $teacherFilter;
+        $types .= 'i';
     }
-    $payoutStmt->close();
+    $payoutSql .= " ORDER BY p.paid_at DESC, p.id DESC";
+
+    $payoutStmt = $conn->prepare($payoutSql);
+    if ($payoutStmt) {
+        $payoutStmt->bind_param($types, ...$params);
+        if ($payoutStmt->execute()) {
+            $payoutRows = $payoutStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        }
+        $payoutStmt->close();
+    }
+
+    $monthlyStmt = $conn->prepare("SELECT DATE_FORMAT(session_date, '%Y-%m') AS ym, SUM(amount) AS total_amount, SUM(teacher_share) AS total_share
+        FROM teacher_sessions
+        WHERE session_date BETWEEN ? AND ?
+        GROUP BY ym
+        ORDER BY ym");
+    if ($monthlyStmt) {
+        $monthlyStmt->bind_param('ss', $monthStart, $monthEnd);
+        if ($monthlyStmt->execute()) {
+            $monthlyResult = $monthlyStmt->get_result();
+            while ($row = $monthlyResult->fetch_assoc()) {
+                $monthlySessions[$row['ym']] = [
+                    'amount' => (float) ($row['total_amount'] ?? 0),
+                    'share' => (float) ($row['total_share'] ?? 0),
+                ];
+            }
+        }
+        $monthlyStmt->close();
+    }
+
+    $monthlyPayoutStmt = $conn->prepare("SELECT DATE_FORMAT(paid_at, '%Y-%m') AS ym, SUM(amount) AS total_amount
+        FROM teacher_payouts
+        WHERE paid_at BETWEEN ? AND ?
+        GROUP BY ym
+        ORDER BY ym");
+    if ($monthlyPayoutStmt) {
+        $monthlyPayoutStmt->bind_param('ss', $monthStart, $monthEnd);
+        if ($monthlyPayoutStmt->execute()) {
+            $payoutResult = $monthlyPayoutStmt->get_result();
+            while ($row = $payoutResult->fetch_assoc()) {
+                $monthlyPayouts[$row['ym']] = (float) ($row['total_amount'] ?? 0);
+            }
+        }
+        $monthlyPayoutStmt->close();
+    }
 }
 
 // Monthly analytics for charts (last 6 months including current)
 $months = [];
-$monthStart = (new DateTime('first day of -5 month'))->format('Y-m-01');
-$monthEnd = date('Y-m-t');
-
-$monthlySessions = [];
-$monthlyStmt = $conn->prepare("SELECT DATE_FORMAT(session_date, '%Y-%m') AS ym, SUM(amount) AS total_amount, SUM(teacher_share) AS total_share
-    FROM teacher_sessions
-    WHERE session_date BETWEEN ? AND ?
-    GROUP BY ym
-    ORDER BY ym");
-if ($monthlyStmt) {
-    $monthlyStmt->bind_param('ss', $monthStart, $monthEnd);
-    if ($monthlyStmt->execute()) {
-        $monthlyResult = $monthlyStmt->get_result();
-        while ($row = $monthlyResult->fetch_assoc()) {
-            $monthlySessions[$row['ym']] = [
-                'amount' => (float) ($row['total_amount'] ?? 0),
-                'share' => (float) ($row['total_share'] ?? 0),
-            ];
-        }
-    }
-    $monthlyStmt->close();
-}
-
-$monthlyPayouts = [];
-$monthlyPayoutStmt = $conn->prepare("SELECT DATE_FORMAT(paid_at, '%Y-%m') AS ym, SUM(amount) AS total_amount
-    FROM teacher_payouts
-    WHERE paid_at BETWEEN ? AND ?
-    GROUP BY ym
-    ORDER BY ym");
-if ($monthlyPayoutStmt) {
-    $monthlyPayoutStmt->bind_param('ss', $monthStart, $monthEnd);
-    if ($monthlyPayoutStmt->execute()) {
-        $payoutResult = $monthlyPayoutStmt->get_result();
-        while ($row = $payoutResult->fetch_assoc()) {
-            $monthlyPayouts[$row['ym']] = (float) ($row['total_amount'] ?? 0);
-        }
-    }
-    $monthlyPayoutStmt->close();
-}
 
 for ($i = 5; $i >= 0; $i--) {
     $monthKey = date('Y-m', strtotime("-$i month"));
@@ -314,6 +278,135 @@ for ($i = 5; $i >= 0; $i--) {
         'payout' => $monthlyPayouts[$monthKey] ?? 0,
     ];
 }
+
+$teacherSessionsById = [];
+
+foreach ($sessionRows as $session) {
+    $teacherId = (int) ($session['teacher_id'] ?? 0);
+    $percentage = (float) ($session['teacher_percentage'] ?? 0);
+    $totalAmount = (float) ($session['amount'] ?? 0);
+    $teacherShare = (float) ($session['teacher_share'] ?? 0);
+
+    if (!isset($teacherSessionsById[$teacherId])) {
+        $teacherSessionsById[$teacherId] = [
+            'info' => [
+                'id' => $teacherId,
+                'name' => $session['teacher_name'] ?? '',
+                'percentage' => $percentage,
+            ],
+            'sessions' => [],
+            'totals' => [
+                'amount' => 0,
+                'share' => 0,
+                'profit' => 0,
+            ],
+        ];
+    }
+
+    $rawStudents = $sessionStudentsMap[(int) $session['id']] ?? [];
+    if (!$rawStudents && !empty($session['student_name'])) {
+        $rawStudents = [[
+            'student_name' => $session['student_name'],
+            'amount' => $totalAmount,
+        ]];
+    }
+
+    $displayStudents = [];
+    $formStudents = [];
+    foreach ($rawStudents as $studentRow) {
+        $studentName = $studentRow['student_name'] ?? ($studentRow['name'] ?? '');
+        $studentAmount = (float) ($studentRow['amount'] ?? 0);
+        if ($studentName === '' && $studentAmount <= 0) {
+            continue;
+        }
+        $studentShare = round($studentAmount * ($percentage / 100), 2);
+        $displayStudents[] = [
+            'name' => $studentName !== '' ? $studentName : '—',
+            'amount' => $studentAmount,
+            'share' => $studentShare,
+            'profit' => $studentAmount - $studentShare,
+        ];
+        $formStudents[] = [
+            'name' => $studentName,
+            'amount' => $studentAmount,
+        ];
+    }
+
+    if (!$displayStudents) {
+        $displayStudents[] = [
+            'name' => !empty($session['student_name']) ? $session['student_name'] : '—',
+            'amount' => $totalAmount,
+            'share' => $teacherShare,
+            'profit' => $totalAmount - $teacherShare,
+        ];
+        $formStudents[] = [
+            'name' => $session['student_name'] ?? '',
+            'amount' => $totalAmount,
+        ];
+    }
+
+    $teacherSessionsById[$teacherId]['sessions'][] = [
+        'id' => (int) $session['id'],
+        'teacher_id' => $teacherId,
+        'session_date' => $session['session_date'],
+        'group_name' => $session['group_name'],
+        'teacher_percentage' => $percentage,
+        'total_amount' => $totalAmount,
+        'total_share' => $teacherShare,
+        'total_profit' => $totalAmount - $teacherShare,
+        'students' => $displayStudents,
+        'form_students' => $formStudents,
+        'student_summary' => $session['student_name'] ?? '',
+    ];
+
+    $teacherSessionsById[$teacherId]['totals']['amount'] += $totalAmount;
+    $teacherSessionsById[$teacherId]['totals']['share'] += $teacherShare;
+    $teacherSessionsById[$teacherId]['totals']['profit'] += $totalAmount - $teacherShare;
+}
+
+$teacherLedgers = [];
+
+foreach ($teacherMetrics as $teacherMetric) {
+    $tid = (int) ($teacherMetric['id'] ?? 0);
+    $ledger = $teacherSessionsById[$tid] ?? [
+        'sessions' => [],
+        'totals' => [
+            'amount' => 0,
+            'share' => 0,
+            'profit' => 0,
+        ],
+    ];
+
+    $teacherLedgers[$tid] = [
+        'info' => $teacherMetric,
+        'sessions' => $ledger['sessions'] ?? [],
+        'totals' => $ledger['totals'] ?? [
+            'amount' => 0,
+            'share' => 0,
+            'profit' => 0,
+        ],
+    ];
+}
+
+foreach ($teacherSessionsById as $tid => $ledger) {
+    if (!isset($teacherLedgers[$tid])) {
+        $teacherLedgers[$tid] = [
+            'info' => $ledger['info'] + [
+                'range_amount' => 0,
+                'range_share' => 0,
+                'range_profit' => 0,
+                'range_payout' => 0,
+                'total_amount_all' => 0,
+                'total_share_all' => 0,
+                'total_payout_all' => 0,
+            ],
+            'sessions' => $ledger['sessions'],
+            'totals' => $ledger['totals'],
+        ];
+    }
+}
+
+$teacherLedgers = array_values($teacherLedgers);
 
 $flash = $_SESSION['teachers_flash'] ?? null;
 unset($_SESSION['teachers_flash']);
@@ -358,6 +451,8 @@ $redirectQuery = http_build_query($filters + ($teacherFilter ? ['teacher_id' => 
         @media print {
             body { background: #ffffff; color: #0f172a; }
             .no-print { display: none !important; }
+            .glass { background: #ffffff !important; box-shadow: none !important; }
+            table { page-break-inside: avoid; }
         }
     </style>
 </head>
@@ -414,6 +509,12 @@ $redirectQuery = http_build_query($filters + ($teacherFilter ? ['teacher_id' => 
     <?php if ($flash): ?>
         <div class="mt-4 rounded-xl border <?= $flash['type'] === 'danger' ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700' ?> px-4 py-3">
             <?= htmlspecialchars($flash['message']) ?>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($bootstrapError): ?>
+        <div class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700">
+            <?= htmlspecialchars($bootstrapError) ?>
         </div>
     <?php endif; ?>
 
@@ -514,85 +615,144 @@ $redirectQuery = http_build_query($filters + ($teacherFilter ? ['teacher_id' => 
         </div>
     </div>
 
-    <div class="mt-8 grid gap-6 lg:grid-cols-2">
-        <div class="glass rounded-2xl p-5 shadow-soft">
-            <div class="flex items-center justify-between">
-                <h2 class="text-xl font-semibold text-slate-900">Dars tushumlari</h2>
-            </div>
-            <div class="mt-4 overflow-x-auto">
-                <table class="min-w-full divide-y divide-slate-200 text-sm">
-                    <thead>
-                        <tr class="text-left text-xs uppercase text-slate-500">
-                            <th class="py-2 pr-4">Sana</th>
-                            <th class="py-2 pr-4">O'qituvchi</th>
-                            <th class="py-2 pr-4">Guruh / Talaba</th>
-                            <th class="py-2 pr-4">To'lov</th>
-                            <th class="py-2 pr-4">Foiz</th>
-                            <th class="py-2 pr-4">Ulash</th>
-                            <th class="py-2">Amal</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        <?php foreach ($sessionRows as $session): ?>
-                        <tr class="hover:bg-white/70">
-                            <td class="py-3 pr-4 font-medium text-slate-900"><?= htmlspecialchars($session['session_date']) ?></td>
-                            <td class="py-3 pr-4 text-slate-700"><?= htmlspecialchars($session['teacher_name']) ?></td>
-                            <td class="py-3 pr-4">
-                                <div class="text-slate-900 font-semibold"><?= htmlspecialchars($session['group_name']) ?></div>
-                                <?php $students = $sessionStudentsMap[(int) $session['id']] ?? []; ?>
-                                <?php if ($students): ?>
-                                    <ul class="mt-2 space-y-1 text-xs text-slate-500">
-                                        <?php foreach ($students as $student): ?>
-                                            <li class="flex justify-between gap-4">
-                                                <span class="font-medium text-slate-600"><?= htmlspecialchars($student['student_name']) ?></span>
-                                                <span class="text-slate-500"><?= format_money((float) $student['amount']) ?> so'm</span>
-                                            </li>
-                                        <?php endforeach; ?>
-                                    </ul>
-                                <?php elseif ($session['student_name']): ?>
-                                    <div class="mt-2 text-xs text-slate-500"><?= htmlspecialchars($session['student_name']) ?></div>
-                                <?php else: ?>
-                                    <div class="mt-2 text-xs text-slate-400">Talabalar kiritilmagan</div>
+    <div class="mt-8 grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] print:grid-cols-1">
+        <div class="space-y-6">
+            <?php foreach ($teacherLedgers as $ledger): ?>
+                <?php $teacher = $ledger['info']; ?>
+                <?php $sessions = $ledger['sessions']; ?>
+                <?php $totals = $ledger['totals']; ?>
+                <section class="glass rounded-2xl p-5 shadow-soft">
+                    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold text-slate-900"><?= htmlspecialchars($teacher['name'] ?? "Noma'lum o'qituvchi") ?></h2>
+                            <div class="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
+                                <span class="rounded-full bg-white/70 px-3 py-1">Standart ulush: <?= htmlspecialchars(number_format((float) ($teacher['percentage'] ?? 0), 2)) ?>%</span>
+                                <?php if (!empty($teacher['phone'])): ?>
+                                    <span class="rounded-full bg-white/70 px-3 py-1">Tel: <?= htmlspecialchars($teacher['phone']) ?></span>
                                 <?php endif; ?>
-                            </td>
-                            <td class="py-3 pr-4 font-semibold text-slate-900"><?= format_money((float) $session['amount']) ?></td>
-                            <td class="py-3 pr-4 text-slate-600"><?= htmlspecialchars($session['teacher_percentage']) ?>%</td>
-                            <td class="py-3 pr-4 text-primary font-semibold"><?= format_money((float) $session['teacher_share']) ?></td>
-                            <td class="py-3">
-                                <div class="flex gap-2">
-                                    <button data-edit-session='<?= json_encode([
-                                        'id' => (int) $session['id'],
-                                        'teacher_id' => (int) $session['teacher_id'],
-                                        'session_date' => $session['session_date'],
-                                        'group_name' => $session['group_name'],
-                                        'student_name' => $session['student_name'],
-                                        'amount' => $session['amount'],
-                                        'teacher_percentage' => $session['teacher_percentage'],
-                                        'students' => array_map(static function ($student) {
-                                            return [
-                                                'name' => $student['student_name'],
-                                                'amount' => $student['amount'],
-                                            ];
-                                        }, $sessionStudentsMap[(int) $session['id']] ?? []),
-                                    ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>' class="rounded-lg border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:bg-white">Tahrirlash</button>
-                                    <form action="manage_session.php" method="post" onsubmit="return confirm('Ushbu dars yozuvini o\'chirasizmi?')">
-                                        <input type="hidden" name="action" value="delete">
-                                        <input type="hidden" name="session_id" value="<?= (int) $session['id'] ?>">
-                                        <input type="hidden" name="redirect_query" value="<?= htmlspecialchars($redirectQuery) ?>">
-                                        <button type="submit" class="rounded-lg border border-red-200 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50">O'chirish</button>
-                                    </form>
-                                </div>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                        <?php if (!$sessionRows): ?>
-                            <tr>
-                                <td colspan="7" class="py-6 text-center text-slate-500">Tanlangan oraliqda dars yozuvlari topilmadi.</td>
-                            </tr>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
+                            </div>
+                            <?php if (!empty($teacher['note'])): ?>
+                                <p class="mt-2 text-xs text-slate-500 whitespace-pre-line"><?= htmlspecialchars($teacher['note']) ?></p>
+                            <?php endif; ?>
+                        </div>
+                        <div class="flex flex-wrap gap-2 no-print">
+                            <button data-edit-teacher='<?= json_encode([
+                                'id' => (int) ($teacher['id'] ?? 0),
+                                'name' => $teacher['name'] ?? '',
+                                'percentage' => $teacher['percentage'] ?? '',
+                                'phone' => $teacher['phone'] ?? '',
+                                'note' => $teacher['note'] ?? '',
+                            ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>' class="rounded-lg border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:bg-white">Tahrirlash</button>
+                            <button data-open="sessionDialog" data-session-teacher="<?= (int) ($teacher['id'] ?? 0) ?>" data-session-percentage="<?= htmlspecialchars($teacher['percentage'] ?? '') ?>" class="rounded-lg border border-primary/40 px-3 py-1 text-xs font-semibold text-primary hover:bg-primary/10">Dars qo'shish</button>
+                            <button data-open="payoutDialog" data-payout-teacher="<?= (int) ($teacher['id'] ?? 0) ?>" class="rounded-lg border border-emerald-300 px-3 py-1 text-xs font-semibold text-emerald-600 hover:bg-emerald-50">Maosh to'lovi</button>
+                        </div>
+                    </div>
+                    <div class="mt-4 grid gap-3 text-xs text-slate-600 sm:grid-cols-3">
+                        <div class="rounded-xl bg-white/70 px-3 py-2">
+                            <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Davr tushumi</p>
+                            <p class="mt-1 text-base font-semibold text-slate-900"><?= format_money((float) ($teacher['range_amount'] ?? $totals['amount'])) ?> so'm</p>
+                        </div>
+                        <div class="rounded-xl bg-white/70 px-3 py-2">
+                            <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">O'qituvchi ulushi</p>
+                            <p class="mt-1 text-base font-semibold text-primary"><?= format_money((float) ($teacher['range_share'] ?? $totals['share'])) ?> so'm</p>
+                        </div>
+                        <div class="rounded-xl bg-white/70 px-3 py-2">
+                            <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Markaz foydasi</p>
+                            <p class="mt-1 text-base font-semibold text-emerald-600"><?= format_money((float) ($teacher['range_profit'] ?? $totals['profit'])) ?> so'm</p>
+                        </div>
+                    </div>
+                    <div class="mt-4 overflow-x-auto">
+                        <table class="min-w-full divide-y divide-slate-200 text-sm">
+                            <thead>
+                                <tr class="text-left text-xs uppercase text-slate-500">
+                                    <th class="py-2 pr-4">Sana</th>
+                                    <th class="py-2 pr-4">Guruh</th>
+                                    <th class="py-2 pr-4">Talaba</th>
+                                    <th class="py-2 pr-4">Talaba to'lovi</th>
+                                    <th class="py-2 pr-4">Ulush</th>
+                                    <th class="py-2 pr-4">Foyda</th>
+                                    <th class="py-2 pr-4">Jami</th>
+                                    <th class="py-2">Amal</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <?php foreach ($sessions as $sessionData): ?>
+                                    <?php $studentRows = $sessionData['students']; ?>
+                                    <?php $rowspan = max(1, count($studentRows)); ?>
+                                    <?php foreach ($studentRows as $index => $studentRow): ?>
+                                        <tr class="align-top hover:bg-white/70">
+                                            <?php if ($index === 0): ?>
+                                                <td rowspan="<?= $rowspan ?>" class="py-3 pr-4 font-medium text-slate-900"><?= htmlspecialchars($sessionData['session_date']) ?></td>
+                                                <td rowspan="<?= $rowspan ?>" class="py-3 pr-4">
+                                                    <div class="font-semibold text-slate-900"><?= htmlspecialchars($sessionData['group_name']) ?></div>
+                                                    <div class="text-xs text-slate-500"><?= htmlspecialchars(number_format((float) $sessionData['teacher_percentage'], 2)) ?>%</div>
+                                                </td>
+                                            <?php endif; ?>
+                                            <td class="py-3 pr-4 text-slate-700"><?= htmlspecialchars($studentRow['name']) ?></td>
+                                            <td class="py-3 pr-4 font-semibold text-slate-900"><?= format_money((float) $studentRow['amount']) ?></td>
+                                            <td class="py-3 pr-4 text-primary font-semibold"><?= format_money((float) $studentRow['share']) ?></td>
+                                            <td class="py-3 pr-4 text-emerald-600 font-semibold"><?= format_money((float) $studentRow['profit']) ?></td>
+                                            <?php if ($index === 0): ?>
+                                                <td rowspan="<?= $rowspan ?>" class="py-3 pr-4 text-xs text-slate-500">
+                                                    <div class="font-semibold text-slate-900"><?= format_money($sessionData['total_amount']) ?> so'm</div>
+                                                    <div>Ulush: <?= format_money($sessionData['total_share']) ?> so'm</div>
+                                                    <div class="text-emerald-600">Foyda: <?= format_money($sessionData['total_profit']) ?> so'm</div>
+                                                </td>
+                                                <td rowspan="<?= $rowspan ?>" class="py-3">
+                                                    <div class="flex flex-col gap-2">
+                                                        <button data-edit-session='<?= json_encode([
+                                                            'id' => $sessionData['id'],
+                                                            'teacher_id' => $sessionData['teacher_id'],
+                                                            'session_date' => $sessionData['session_date'],
+                                                            'group_name' => $sessionData['group_name'],
+                                                            'teacher_percentage' => $sessionData['teacher_percentage'],
+                                                            'students' => array_map(static function ($student) {
+                                                                return [
+                                                                    'name' => $student['name'],
+                                                                    'amount' => $student['amount'],
+                                                                ];
+                                                            }, $sessionData['form_students'] ?? []),
+                                                            'student_name' => $sessionData['student_summary'],
+                                                            'amount' => $sessionData['total_amount'],
+                                                        ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>' class="rounded-lg border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:bg-white">Tahrirlash</button>
+                                                        <form action="manage_session.php" method="post" onsubmit="return confirm('Ushbu dars yozuvini o\'chirasizmi?')">
+                                                            <input type="hidden" name="action" value="delete">
+                                                            <input type="hidden" name="session_id" value="<?= (int) $sessionData['id'] ?>">
+                                                            <input type="hidden" name="redirect_query" value="<?= htmlspecialchars($redirectQuery) ?>">
+                                                            <button type="submit" class="rounded-lg border border-red-200 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50">O'chirish</button>
+                                                        </form>
+                                                    </div>
+                                                </td>
+                                            <?php endif; ?>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php endforeach; ?>
+                                <?php if (!$sessions): ?>
+                                    <tr>
+                                        <td colspan="8" class="py-6 text-center text-slate-500">Tanlangan oraliqda dars yozuvlari yo'q.</td>
+                                    </tr>
+                                <?php endif; ?>
+                            </tbody>
+                            <tfoot>
+                                <tr class="bg-slate-50 text-sm font-semibold text-slate-700">
+                                    <td colspan="3" class="py-3 pr-4 text-right">O'qituvchi jami:</td>
+                                    <td class="py-3 pr-4 text-slate-900"><?= format_money($totals['amount']) ?></td>
+                                    <td class="py-3 pr-4 text-primary"><?= format_money($totals['share']) ?></td>
+                                    <td class="py-3 pr-4 text-emerald-600"><?= format_money($totals['profit']) ?></td>
+                                    <td colspan="2"></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </section>
+            <?php endforeach; ?>
+            <?php if (!$teacherLedgers): ?>
+                <section class="glass rounded-2xl p-8 text-center shadow-soft">
+                    <h2 class="text-lg font-semibold text-slate-900">O'qituvchilar ro'yxati bo'sh</h2>
+                    <p class="mt-2 text-sm text-slate-500">Avval o'qituvchi qo'shing va dars tushumlarini kiritishni boshlang.</p>
+                    <button data-open="teacherDialog" class="no-print mt-4 inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white shadow hover:bg-primary/90">＋ O'qituvchi qo'shish</button>
+                </section>
+            <?php endif; ?>
         </div>
         <div class="glass rounded-2xl p-5 shadow-soft">
             <div class="flex items-center justify-between">

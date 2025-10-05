@@ -7,8 +7,20 @@ if (!isset($_SESSION['authenticated']) || $_SESSION['authenticated'] !== true) {
 }
 
 require_once '../db.php';
+require_once __DIR__ . '/bootstrap.php';
 
 date_default_timezone_set('Asia/Tashkent');
+
+try {
+    ensure_teacher_tables($conn);
+} catch (Throwable $exception) {
+    $_SESSION['teachers_flash'] = [
+        'message' => "Bazani tayyorlashda xatolik: " . $exception->getMessage(),
+        'type' => 'danger',
+    ];
+    header('Location: index.php');
+    exit();
+}
 
 $defaultStart = date('Y-m-01');
 $defaultEnd = date('Y-m-d');
