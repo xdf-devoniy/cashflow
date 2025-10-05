@@ -6,6 +6,7 @@ date_default_timezone_set('Asia/Tashkent');
 
 const TELEGRAM_DEFAULT_PASSWORD_HASH = '$2y$12$wzNcrKHWO/DpmBPXRYqEi.TM/fXjv1fabtYPHQjgGigV0g8AzypSW';
 const TELEGRAM_DEFAULT_MINI_APP_URL = 'https://oxfordlc.uz/cashflow/telegram/miniapp.php';
+const TELEGRAM_DEFAULT_ADMIN_CHAT_IDS = [899454270];
 
 /**
  * Lazily load the Telegram configuration array.
@@ -106,6 +107,82 @@ function verify_bot_password(string $input): bool
 }
 
 /**
+ * Parse a delimited list of chat IDs into sanitized integers.
+ */
+function parse_chat_id_list(string $value): array
+{
+    $parts = preg_split('/[\s,;]+/', $value, -1, PREG_SPLIT_NO_EMPTY);
+    if ($parts === false) {
+        return [];
+    }
+
+    $ids = [];
+    foreach ($parts as $part) {
+        $id = (int) trim($part);
+        if ($id > 0) {
+            $ids[] = $id;
+        }
+    }
+
+    return $ids;
+}
+
+/**
+ * Resolve administrative chat IDs used for proactive notifications.
+ */
+function resolve_admin_chat_ids(): array
+{
+    $ids = [];
+
+    $envList = getenv('TELEGRAM_ADMIN_CHAT_IDS');
+    if ($envList) {
+        $ids = array_merge($ids, parse_chat_id_list($envList));
+    }
+
+    $config = load_bot_config();
+    if (!empty($config['admin_chat_ids'])) {
+        if (is_array($config['admin_chat_ids'])) {
+            foreach ($config['admin_chat_ids'] as $candidate) {
+                $candidateId = (int) $candidate;
+                if ($candidateId > 0) {
+                    $ids[] = $candidateId;
+                }
+            }
+        } elseif (is_string($config['admin_chat_ids'])) {
+            $ids = array_merge($ids, parse_chat_id_list($config['admin_chat_ids']));
+        }
+    }
+
+    if (empty($ids)) {
+        $ids = TELEGRAM_DEFAULT_ADMIN_CHAT_IDS;
+    }
+
+    $normalized = [];
+    foreach ($ids as $value) {
+        if (is_int($value)) {
+            if ($value > 0) {
+                $normalized[] = $value;
+            }
+            continue;
+        }
+
+        if (is_string($value)) {
+            $trimmed = trim($value);
+            if ($trimmed !== '' && preg_match('/^-?\d+$/', $trimmed)) {
+                $candidate = (int) $trimmed;
+                if ($candidate > 0) {
+                    $normalized[] = $candidate;
+                }
+            }
+        }
+    }
+
+    $normalized = array_values(array_unique($normalized));
+
+    return $normalized;
+}
+
+/**
  * Ensure shared expense tables exist before transactions are stored.
  */
 function ensure_expense_tables(mysqli $conn): void
@@ -184,6 +261,25 @@ function fetch_authenticated_chat_ids(mysqli $conn): array
     }
 
     return $chatIds;
+}
+
+/**
+ * Merge authenticated chats with configured administrators for notifications.
+ */
+function fetch_notification_chat_ids(mysqli $conn): array
+{
+    ensure_telegram_auth_table($conn);
+
+    $chatIds = fetch_authenticated_chat_ids($conn);
+    $adminIds = resolve_admin_chat_ids();
+
+    $combined = array_merge($chatIds, $adminIds);
+    $combined = array_map('intval', $combined);
+    $combined = array_filter($combined, static function (int $value) {
+        return $value > 0;
+    });
+
+    return array_values(array_unique($combined));
 }
 
 /**

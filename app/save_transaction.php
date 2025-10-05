@@ -90,8 +90,7 @@ if ($stmt->execute()) {
         require_once __DIR__ . '/../telegram/helpers.php';
         $botToken = resolve_bot_token();
         if ($botToken) {
-            ensure_telegram_auth_table($conn);
-            $chatIds = fetch_authenticated_chat_ids($conn);
+            $chatIds = fetch_notification_chat_ids($conn);
             if (!empty($chatIds)) {
                 $amountFormatted = format_currency($amount);
                 $methodLabels = [

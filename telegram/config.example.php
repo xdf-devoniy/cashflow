@@ -7,4 +7,6 @@ return [
     'password_hash' => '',
     // Optional: URL to the Telegram mini ilova.
     'mini_app_url' => 'https://example.com/cashflow/telegram/miniapp.php',
+    // Optional: chat IDs that should always receive notifications.
+    'admin_chat_ids' => [899454270],
 ];
