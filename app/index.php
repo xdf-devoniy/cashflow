@@ -208,6 +208,11 @@ if ($incomeStmt) {
     $incomeStmt->close();
 }
 
+$incomePercentages = [
+    'cash' => percentage($incomeTotals['cash'], $incomeTotals['total']),
+    'click' => percentage($incomeTotals['click'], $incomeTotals['total']),
+];
+
 $expenseRecords = [];
 $expenseTotals = [
     'total' => 0.0,
@@ -254,6 +259,11 @@ if ($expenseStmt) {
     }
     $expenseStmt->close();
 }
+
+$expensePercentages = [
+    'cash' => percentage($expenseTotals['cash'], $expenseTotals['total']),
+    'click' => percentage($expenseTotals['click'], $expenseTotals['total']),
+];
 
 $reportSql = "SELECT DATE_FORMAT(date, '%Y-%m') AS period,
         COALESCE(SUM(CASE WHEN cash_in = 1 THEN payment END), 0) AS income,
@@ -320,7 +330,9 @@ if ($summaryStmt) {
     }
     $summaryStmt->close();
 }
-$rangeSummary['balance'] = $rangeSummary['income'] - $rangeSummary['expense'];
+$rangeSummary['cash_balance'] = $rangeSummary['income_cash'] - $rangeSummary['expense_cash'];
+$rangeSummary['click_balance'] = $rangeSummary['income_click'] - $rangeSummary['expense_click'];
+$rangeSummary['balance'] = $rangeSummary['cash_balance'] + $rangeSummary['click_balance'];
 
 $categoryBreakdown = [];
 $categoryBreakdownSql = "SELECT COALESCE(c.name, 'Turkum tanlanmagan') AS name,
@@ -438,6 +450,28 @@ unset($_SESSION['flash_message'], $_SESSION['flash_type']);
 function uzs(float $value): string
 {
     return number_format($value, 0, '.', ' ') . ' so\'m';
+}
+
+function percentage(float $part, float $whole): float
+{
+    if ($whole <= 0.0) {
+        return 0.0;
+    }
+
+    return round(($part / $whole) * 100, 1);
+}
+
+function balance_class(float $value): string
+{
+    if ($value > 0) {
+        return 'text-emerald-600';
+    }
+
+    if ($value < 0) {
+        return 'text-rose-500';
+    }
+
+    return 'text-slate-600';
 }
 
 function renderComment(?string $comment): string
@@ -639,11 +673,51 @@ function renderComment(?string $comment): string
                         <h2 class="text-lg font-semibold text-slate-900">Daromadlar taqsimoti</h2>
                         <p class="text-sm text-slate-500">Naqd va Click ulushi</p>
                         <canvas id="incomeMethodChart" class="mt-6 h-56 w-full"></canvas>
+                        <div class="mt-5 space-y-2 text-sm text-slate-500">
+                            <div class="flex items-center justify-between">
+                                <span>Naqd</span>
+                                <span class="font-semibold text-slate-900">
+                                    <?= uzs($incomeTotals['cash']) ?>
+                                    <span class="ml-1 text-xs text-slate-400"><?= number_format($incomePercentages['cash'], 1, ',', ' ') ?>%</span>
+                                </span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span>Click</span>
+                                <span class="font-semibold text-slate-900">
+                                    <?= uzs($incomeTotals['click']) ?>
+                                    <span class="ml-1 text-xs text-slate-400"><?= number_format($incomePercentages['click'], 1, ',', ' ') ?>%</span>
+                                </span>
+                            </div>
+                            <div class="flex items-center justify-between text-slate-600">
+                                <span>Jami</span>
+                                <span class="font-semibold text-slate-900"><?= uzs($incomeTotals['total']) ?></span>
+                            </div>
+                        </div>
                     </div>
                     <div class="rounded-3xl border border-white/80 bg-white/90 p-6 shadow-lg shadow-slate-200/70">
                         <h2 class="text-lg font-semibold text-slate-900">Xarajatlar taqsimoti</h2>
                         <p class="text-sm text-slate-500">Naqd va Click ulushi</p>
                         <canvas id="expenseMethodChart" class="mt-6 h-56 w-full"></canvas>
+                        <div class="mt-5 space-y-2 text-sm text-slate-500">
+                            <div class="flex items-center justify-between">
+                                <span>Naqd</span>
+                                <span class="font-semibold text-slate-900">
+                                    <?= uzs($expenseTotals['cash']) ?>
+                                    <span class="ml-1 text-xs text-slate-400"><?= number_format($expensePercentages['cash'], 1, ',', ' ') ?>%</span>
+                                </span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span>Click</span>
+                                <span class="font-semibold text-slate-900">
+                                    <?= uzs($expenseTotals['click']) ?>
+                                    <span class="ml-1 text-xs text-slate-400"><?= number_format($expensePercentages['click'], 1, ',', ' ') ?>%</span>
+                                </span>
+                            </div>
+                            <div class="flex items-center justify-between text-slate-600">
+                                <span>Jami</span>
+                                <span class="font-semibold text-slate-900"><?= uzs($expenseTotals['total']) ?></span>
+                            </div>
+                        </div>
                     </div>
                     <div class="rounded-3xl border border-white/80 bg-white/90 p-6 shadow-lg shadow-slate-200/70">
                         <h2 class="text-lg font-semibold text-slate-900">Turkumlar kesimi</h2>
@@ -913,7 +987,7 @@ function renderComment(?string $comment): string
                         </form>
                     </div>
 
-                    <div class="grid gap-6 md:grid-cols-3">
+                    <div class="grid gap-6 md:grid-cols-2 xl:grid-cols-5">
                         <div class="rounded-2xl border border-primary-100 bg-primary-50/80 px-5 py-4 text-primary-700">
                             <p class="text-xs uppercase tracking-wide">Davr daromadi</p>
                             <p class="mt-1 text-lg font-semibold"><?= uzs($rangeSummary['income']) ?></p>
@@ -922,9 +996,20 @@ function renderComment(?string $comment): string
                             <p class="text-xs uppercase tracking-wide">Davr xarajati</p>
                             <p class="mt-1 text-lg font-semibold"><?= uzs($rangeSummary['expense']) ?></p>
                         </div>
-                        <div class="rounded-2xl border border-emerald-100 bg-emerald-50/80 px-5 py-4 text-emerald-700">
-                            <p class="text-xs uppercase tracking-wide">Balans</p>
-                            <p class="mt-1 text-lg font-semibold"><?= uzs($rangeSummary['balance']) ?></p>
+                        <div class="rounded-2xl border border-emerald-100/70 bg-emerald-50/80 px-5 py-4">
+                            <p class="text-xs uppercase tracking-wide text-emerald-600">Naqd qoldiq</p>
+                            <p class="mt-1 text-lg font-semibold <?= balance_class($rangeSummary['cash_balance']) ?>"><?= uzs($rangeSummary['cash_balance']) ?></p>
+                            <p class="mt-2 text-xs text-slate-500">Daromad: <?= uzs($rangeSummary['income_cash']) ?> · Xarajat: <?= uzs($rangeSummary['expense_cash']) ?></p>
+                        </div>
+                        <div class="rounded-2xl border border-sky-100/70 bg-sky-50/80 px-5 py-4">
+                            <p class="text-xs uppercase tracking-wide text-sky-600">Click qoldiq</p>
+                            <p class="mt-1 text-lg font-semibold <?= balance_class($rangeSummary['click_balance']) ?>"><?= uzs($rangeSummary['click_balance']) ?></p>
+                            <p class="mt-2 text-xs text-slate-500">Daromad: <?= uzs($rangeSummary['income_click']) ?> · Xarajat: <?= uzs($rangeSummary['expense_click']) ?></p>
+                        </div>
+                        <div class="rounded-2xl border border-slate-200 bg-white/80 px-5 py-4">
+                            <p class="text-xs uppercase tracking-wide text-slate-500">Umumiy balans</p>
+                            <p class="mt-1 text-lg font-semibold <?= balance_class($rangeSummary['balance']) ?>"><?= uzs($rangeSummary['balance']) ?></p>
+                            <p class="mt-2 text-xs text-slate-500">Naqd + Click qoldiqlari yig'indisi</p>
                         </div>
                     </div>
 
