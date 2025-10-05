@@ -1,4 +1,72 @@
 <?php
+session_start();
+
+const AUTH_PASSWORD = 'Rasul777';
+
+$authError = null;
+$redirectKey = isset($_GET['redirect']) ? (string) $_GET['redirect'] : '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $redirectKey = isset($_POST['redirect']) ? (string) $_POST['redirect'] : $redirectKey;
+    $submittedPassword = trim((string) ($_POST['password'] ?? ''));
+    if ($submittedPassword !== '') {
+        if (hash_equals(AUTH_PASSWORD, $submittedPassword)) {
+            $_SESSION['authenticated'] = true;
+
+            $redirectMap = [
+                'app' => 'app/index.php',
+            ];
+
+            $target = $redirectMap[$redirectKey] ?? 'index.php';
+            header('Location: ' . $target);
+            exit();
+        }
+
+        $authError = "Parol noto'g'ri. Iltimos, qayta urinib ko'ring.";
+    } else {
+        $authError = 'Parolni kiriting.';
+    }
+}
+
+if (!isset($_SESSION['authenticated']) || $_SESSION['authenticated'] !== true) {
+    $redirectKey = htmlspecialchars($redirectKey, ENT_QUOTES, 'UTF-8');
+    $errorMessage = $authError ? '<p class="mt-4 text-sm text-red-500">' . htmlspecialchars($authError, ENT_QUOTES, 'UTF-8') . '</p>' : '';
+    echo <<<HTML
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oxford LC — Kirish</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+    <style>
+        body { background: radial-gradient(circle at top, #eff6ff, #ffffff); }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center px-4 py-12 text-slate-700">
+    <div class="w-full max-w-md">
+        <div class="rounded-3xl border border-slate-200/80 bg-white/90 shadow-xl shadow-sky-100/60 backdrop-blur p-10">
+            <div class="flex flex-col items-center gap-2 text-center">
+                <span class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-sky-600 text-xl font-semibold">LC</span>
+                <h1 class="text-2xl font-semibold tracking-tight">Cashflow paneliga kirish</h1>
+                <p class="text-sm text-slate-500">Davom etish uchun maxfiy parolni kiriting.</p>
+            </div>
+            <form method="post" class="mt-8 space-y-6">
+                <input type="hidden" name="redirect" value="{$redirectKey}">
+                <div>
+                    <label for="password" class="block text-sm font-medium text-slate-600">Parol</label>
+                    <input id="password" name="password" type="password" required autofocus class="mt-2 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base shadow-sm focus:border-sky-400 focus:ring focus:ring-sky-100" placeholder="Parolni kiriting">
+                </div>
+                <button type="submit" class="w-full rounded-2xl bg-sky-500 py-3 text-base font-semibold text-white shadow-lg shadow-sky-200 transition hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2">Kirish</button>
+                {$errorMessage}
+            </form>
+        </div>
+    </div>
+</body>
+</html>
+HTML;
+    exit();
+}
+
 date_default_timezone_set('Asia/Tashkent');
 
 require_once 'db.php';

@@ -2,7 +2,7 @@
 session_start();
 
 if (!isset($_SESSION['authenticated']) || $_SESSION['authenticated'] !== true) {
-    header('Location: ../index.php');
+    header('Location: ../index.php?redirect=app');
     exit();
 }
 
