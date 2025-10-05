@@ -86,6 +86,34 @@ if ($stmt->execute()) {
             }
         }
     }
+    if ($transactionType === 'income') {
+        require_once __DIR__ . '/../telegram/helpers.php';
+        $botToken = resolve_bot_token();
+        if ($botToken) {
+            ensure_telegram_auth_table($conn);
+            $chatIds = fetch_authenticated_chat_ids($conn);
+            if (!empty($chatIds)) {
+                $amountFormatted = format_currency($amount);
+                $methodLabels = [
+                    'cash' => 'Naqd',
+                    'click' => 'Click',
+                ];
+                $methodLabel = $methodLabels[$paymentMethod] ?? ucfirst($paymentMethod);
+                $lines = [
+                    'Sizda yangi daromad summasi: ' . $amountFormatted . " so'm",
+                    "To'lov usuli: " . $methodLabel,
+                    'Sana: ' . $date,
+                ];
+                if ($comment !== '') {
+                    $lines[] = 'Izoh: ' . $comment;
+                }
+                $message = implode("\n", $lines);
+                foreach ($chatIds as $chatId) {
+                    send_message($botToken, $chatId, $message);
+                }
+            }
+        }
+    }
     $_SESSION['flash_message'] = $transactionType === 'income' ? 'Daromad muvaffaqiyatli saqlandi!' : 'Xarajat muvaffaqiyatli saqlandi!';
     $_SESSION['flash_type'] = 'success';
     unset($_SESSION['form_values']);

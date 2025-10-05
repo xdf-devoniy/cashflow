@@ -170,6 +170,23 @@ function mark_chat_authenticated(mysqli $conn, int $chatId): void
 }
 
 /**
+ * Retrieve all chat IDs that have successfully authenticated with the bot.
+ */
+function fetch_authenticated_chat_ids(mysqli $conn): array
+{
+    $chatIds = [];
+    $result = $conn->query('SELECT chat_id FROM telegram_auth');
+    if ($result instanceof mysqli_result) {
+        while ($row = $result->fetch_assoc()) {
+            $chatIds[] = (int) $row['chat_id'];
+        }
+        $result->free();
+    }
+
+    return $chatIds;
+}
+
+/**
  * Create the Telegram conversation table if it does not exist.
  */
 function ensure_telegram_tables(mysqli $conn): void
