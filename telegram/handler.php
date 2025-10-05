@@ -617,23 +617,6 @@ function persist_transaction(mysqli $conn, array $payload): bool
     }
 }
 
-function fetch_categories(mysqli $conn): array
-{
-    $categories = [];
-    $result = $conn->query('SELECT id, name FROM expense_categories ORDER BY name');
-    if ($result instanceof mysqli_result) {
-        while ($row = $result->fetch_assoc()) {
-            $categories[] = [
-                'id' => (int) $row['id'],
-                'name' => $row['name'],
-            ];
-        }
-        $result->free();
-    }
-
-    return $categories;
-}
-
 function fetch_category_name(mysqli $conn, int $categoryId): ?string
 {
     $stmt = $conn->prepare('SELECT name FROM expense_categories WHERE id = ?');

@@ -120,6 +120,23 @@ function ensure_expense_tables(mysqli $conn): void
     }
 }
 
+function fetch_categories(mysqli $conn): array
+{
+    $categories = [];
+    $result = $conn->query('SELECT id, name FROM expense_categories ORDER BY name');
+    if ($result instanceof mysqli_result) {
+        while ($row = $result->fetch_assoc()) {
+            $categories[] = [
+                'id' => (int) $row['id'],
+                'name' => $row['name'],
+            ];
+        }
+        $result->free();
+    }
+
+    return $categories;
+}
+
 function ensure_telegram_auth_table(mysqli $conn): void
 {
     $sql = "CREATE TABLE IF NOT EXISTS telegram_auth (\n        chat_id BIGINT PRIMARY KEY,\n        verified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
