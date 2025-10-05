@@ -175,27 +175,6 @@ if ($totalsResult = $conn->query($totalsSql)) {
 $overallBalance = $totals['total_income'] - $totals['total_expense'];
 $overallMonthlyBalance = $totals['monthly_income'] - $totals['monthly_expense'];
 
-$trendRows = [];
-$trendSql = "SELECT date,
-        SUM(CASE WHEN cash_in = 1 THEN payment ELSE 0 END) AS income,
-        SUM(CASE WHEN cash_out = 1 THEN payment ELSE 0 END) AS expense
-    FROM transactions
-    GROUP BY date
-    ORDER BY date DESC
-    LIMIT 14";
-
-if ($trendResult = $conn->query($trendSql)) {
-    while ($row = $trendResult->fetch_assoc()) {
-        $trendRows[] = [
-            'date' => $row['date'],
-            'income' => (float)$row['income'],
-            'expense' => (float)$row['expense'],
-        ];
-    }
-    $trendResult->free();
-}
-$trendRows = array_reverse($trendRows);
-
 $filterStartRaw = $_GET['filter_start_date'] ?? '';
 $filterEndRaw = $_GET['filter_end_date'] ?? '';
 $filterErrors = [];
@@ -411,11 +390,6 @@ $currentDateLabel = (new DateTime($current_date))->format('d.m.Y');
                         So'nggi yangilanish: <?= htmlspecialchars(date('d.m.Y H:i')) ?>
                     </div>
                 </div>
-                <div class="rounded-3xl border border-white/70 bg-white/80 p-6 shadow-glass">
-                    <h3 class="text-base font-semibold text-oxford-900">12 kunlik tendensiya</h3>
-                    <p class="mt-1 text-xs text-slate-500">Naqd va Click tushumlari hamda xarajatlar dinamikasi.</p>
-                    <canvas id="trendChart" class="mt-4 h-48 w-full"></canvas>
-                </div>
             </aside>
         </section>
 
@@ -587,7 +561,6 @@ $currentDateLabel = (new DateTime($current_date))->format('d.m.Y');
 </div>
 
 <script>
-    const trendRows = <?= json_encode($trendRows) ?>;
     document.addEventListener('DOMContentLoaded', () => {
         const dateButtons = document.querySelectorAll('[data-action="date"]');
         dateButtons.forEach(button => {
@@ -645,72 +618,6 @@ $currentDateLabel = (new DateTime($current_date))->format('d.m.Y');
             }
         });
 
-        if (typeof Chart !== 'undefined' && trendRows.length) {
-            const ctx = document.getElementById('trendChart');
-            const labels = trendRows.map(item => new Date(item.date).toLocaleDateString('uz-UZ', { day: '2-digit', month: 'short' }));
-            const income = trendRows.map(item => item.income);
-            const expense = trendRows.map(item => item.expense);
-            new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels,
-                    datasets: [
-                        {
-                            label: 'Kirim',
-                            data: income,
-                            borderColor: '#10b981',
-                            backgroundColor: 'rgba(16, 185, 129, 0.2)',
-                            tension: 0.4,
-                            fill: true,
-                            pointRadius: 2,
-                            borderWidth: 2
-                        },
-                        {
-                            label: 'Chiqim',
-                            data: expense,
-                            borderColor: '#f43f5e',
-                            backgroundColor: 'rgba(244, 63, 94, 0.15)',
-                            tension: 0.4,
-                            fill: true,
-                            pointRadius: 2,
-                            borderWidth: 2
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: true,
-                            labels: {
-                                color: '#475569',
-                                usePointStyle: true
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            ticks: {
-                                color: '#64748b'
-                            },
-                            grid: {
-                                display: false
-                            }
-                        },
-                        y: {
-                            ticks: {
-                                color: '#64748b'
-                            },
-                            grid: {
-                                color: 'rgba(148, 163, 184, 0.2)',
-                                drawBorder: false
-                            }
-                        }
-                    }
-                }
-            });
-        }
     });
 
     function validateTransaction() {
