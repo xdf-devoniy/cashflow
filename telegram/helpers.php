@@ -4,6 +4,31 @@ declare(strict_types=1);
 
 date_default_timezone_set('Asia/Tashkent');
 
+const TELEGRAM_DEFAULT_PASSWORD_HASH = '$2y$12$wzNcrKHWO/DpmBPXRYqEi.TM/fXjv1fabtYPHQjgGigV0g8AzypSW';
+const TELEGRAM_DEFAULT_MINI_APP_URL = 'https://oxfordlc.uz/cashflow/telegram/miniapp.php';
+
+/**
+ * Lazily load the Telegram configuration array.
+ */
+function load_bot_config(): array
+{
+    static $config;
+    if ($config !== null) {
+        return $config;
+    }
+
+    $config = [];
+    $configPath = __DIR__ . '/config.php';
+    if (is_file($configPath)) {
+        $fileConfig = include $configPath;
+        if (is_array($fileConfig)) {
+            $config = $fileConfig;
+        }
+    }
+
+    return $config;
+}
+
 /**
  * Resolve the Telegram bot token from environment variables or an optional config file.
  */
@@ -14,15 +39,70 @@ function resolve_bot_token(): ?string
         return trim($envToken);
     }
 
-    $configPath = __DIR__ . '/config.php';
-    if (is_file($configPath)) {
-        $config = include $configPath;
-        if (is_array($config) && !empty($config['token'])) {
-            return trim((string) $config['token']);
-        }
+    $config = load_bot_config();
+    if (!empty($config['token'])) {
+        return trim((string) $config['token']);
     }
 
     return null;
+}
+
+/**
+ * Resolve the hashed password required to unlock the bot.
+ */
+function resolve_bot_password_hash(): string
+{
+    $envHash = getenv('TELEGRAM_BOT_PASSWORD_HASH');
+    if ($envHash) {
+        return trim($envHash);
+    }
+
+    $config = load_bot_config();
+    if (!empty($config['password_hash'])) {
+        return trim((string) $config['password_hash']);
+    }
+
+    return TELEGRAM_DEFAULT_PASSWORD_HASH;
+}
+
+/**
+ * Resolve the mini app URL used in keyboards.
+ */
+function resolve_mini_app_url(): string
+{
+    $envUrl = getenv('TELEGRAM_MINI_APP_URL');
+    if ($envUrl) {
+        return trim($envUrl);
+    }
+
+    $config = load_bot_config();
+    if (!empty($config['mini_app_url'])) {
+        return trim((string) $config['mini_app_url']);
+    }
+
+    if (!empty($_SERVER['HTTP_HOST'])) {
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'];
+        $base = rtrim($scheme . '://' . $host, '/');
+        $scriptName = $_SERVER['SCRIPT_NAME'] ?? '/telegram/handler.php';
+        $dir = rtrim(str_replace('\\', '/', dirname($scriptName)), '/');
+        if ($dir === '.' || $dir === '/') {
+            $dir = '/telegram';
+        }
+        return $base . rtrim($dir, '/') . '/miniapp.php';
+    }
+
+    return TELEGRAM_DEFAULT_MINI_APP_URL;
+}
+
+function verify_bot_password(string $input): bool
+{
+    $hash = resolve_bot_password_hash();
+    if ($hash === '') {
+        return false;
+    }
+
+    return password_verify($input, $hash);
 }
 
 /**
@@ -37,6 +117,38 @@ function ensure_expense_tables(mysqli $conn): void
 
     foreach ($queries as $sql) {
         $conn->query($sql);
+    }
+}
+
+function ensure_telegram_auth_table(mysqli $conn): void
+{
+    $sql = "CREATE TABLE IF NOT EXISTS telegram_auth (\n        chat_id BIGINT PRIMARY KEY,\n        verified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+    $conn->query($sql);
+}
+
+function is_chat_authenticated(mysqli $conn, int $chatId): bool
+{
+    $stmt = $conn->prepare('SELECT chat_id FROM telegram_auth WHERE chat_id = ? LIMIT 1');
+    if (!$stmt) {
+        return false;
+    }
+
+    $stmt->bind_param('i', $chatId);
+    $stmt->execute();
+    $stmt->store_result();
+    $isAuthenticated = $stmt->num_rows > 0;
+    $stmt->close();
+
+    return $isAuthenticated;
+}
+
+function mark_chat_authenticated(mysqli $conn, int $chatId): void
+{
+    $stmt = $conn->prepare('INSERT INTO telegram_auth (chat_id, verified_at) VALUES (?, NOW()) ON DUPLICATE KEY UPDATE verified_at = NOW()');
+    if ($stmt) {
+        $stmt->bind_param('i', $chatId);
+        $stmt->execute();
+        $stmt->close();
     }
 }
 
@@ -121,11 +233,22 @@ function answer_callback(string $token, string $callbackId, string $text = ''): 
  */
 function send_main_menu(string $token, int $chatId): void
 {
+    $miniAppUrl = resolve_mini_app_url();
     $keyboard = [
         'keyboard' => [
-            ["➕ Daromad qo'shish"],
-            ["➖ Xarajat qo'shish"],
-            ['📊 Hisobot']
+            [
+                [
+                    'text' => '📱 Mini ilova',
+                    'web_app' => ['url' => $miniAppUrl],
+                ],
+            ],
+            [
+                ['text' => "➕ Daromad qo'shish"],
+                ['text' => "➖ Xarajat qo'shish"],
+            ],
+            [
+                ['text' => '📊 Hisobot'],
+            ],
         ],
         'resize_keyboard' => true,
         'one_time_keyboard' => false,
@@ -134,7 +257,7 @@ function send_main_menu(string $token, int $chatId): void
     send_message(
         $token,
         $chatId,
-        "Salom! Kerakli amalni tanlang.",
+        "Salom! Kerakli amalni tanlang yoki mini ilovani oching.",
         [
             'reply_markup' => $keyboard,
         ]

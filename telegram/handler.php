@@ -14,6 +14,7 @@ define('STATE_EXPENSE_DATE', 'expense_date');
 define('STATE_EXPENSE_METHOD', 'expense_method');
 define('STATE_EXPENSE_CATEGORY', 'expense_category');
 define('STATE_EXPENSE_COMMENT', 'expense_comment');
+define('STATE_AUTH_PASSWORD', 'auth_password');
 
 $botToken = resolve_bot_token();
 if (!$botToken) {
@@ -24,6 +25,7 @@ if (!$botToken) {
 
 ensure_expense_tables($conn);
 ensure_telegram_tables($conn);
+ensure_telegram_auth_table($conn);
 
 $rawInput = file_get_contents('php://input');
 $update = json_decode($rawInput ?: 'null', true);
@@ -48,15 +50,53 @@ function handle_message(mysqli $conn, string $token, array $message): void
         return;
     }
 
+    $webAppPayload = $message['web_app_data']['data'] ?? null;
     $text = isset($message['text']) ? trim((string) $message['text']) : '';
-    if ($text === '') {
-        send_message($token, $chatId, "Faqat matnli xabarlar qo'llab-quvvatlanadi.");
-        return;
-    }
 
     $conversation = load_conversation($conn, $chatId);
     $state = $conversation['state'];
     $payload = $conversation['payload'];
+
+    $isAuthenticated = is_chat_authenticated($conn, $chatId);
+
+    if (!$isAuthenticated) {
+        if ($webAppPayload !== null) {
+            send_message($token, $chatId, "Iltimos, avval parolni yuboring.");
+            return;
+        }
+
+        if ($state !== STATE_AUTH_PASSWORD) {
+            save_conversation($conn, $chatId, STATE_AUTH_PASSWORD, []);
+            send_message($token, $chatId, "Botdan foydalanish uchun parolni kiriting.");
+            return;
+        }
+
+        if ($text === '') {
+            send_message($token, $chatId, "Parolni matn ko'rinishida yuboring.");
+            return;
+        }
+
+        if (verify_bot_password($text)) {
+            mark_chat_authenticated($conn, $chatId);
+            clear_conversation($conn, $chatId);
+            send_message($token, $chatId, "Tasdiq muvaffaqiyatli. Endi botdan foydalanishingiz mumkin.");
+            send_main_menu($token, $chatId);
+        } else {
+            send_message($token, $chatId, "Parol noto'g'ri. Qayta urinib ko'ring.");
+        }
+
+        return;
+    }
+
+    if ($webAppPayload !== null) {
+        handle_web_app_submission($conn, $token, $chatId, $webAppPayload);
+        return;
+    }
+
+    if ($text === '') {
+        send_message($token, $chatId, "Faqat matnli xabarlar qo'llab-quvvatlanadi.");
+        return;
+    }
 
     if (cancel_requested($text)) {
         clear_conversation($conn, $chatId);
@@ -78,6 +118,7 @@ function handle_message(mysqli $conn, string $token, array $message): void
 
     if ($isStart) {
         clear_conversation($conn, $chatId);
+        send_message($token, $chatId, "Xush kelibsiz! Quyidagi menyudan amalni tanlang.");
         send_main_menu($token, $chatId);
         return;
     }
@@ -399,6 +440,126 @@ function handle_expense_comment(mysqli $conn, string $token, int $chatId, string
 
     clear_conversation($conn, $chatId);
     send_main_menu($token, $chatId);
+}
+
+function handle_web_app_submission(mysqli $conn, string $token, int $chatId, string $rawData): void
+{
+    $decoded = json_decode($rawData, true);
+    if (!is_array($decoded)) {
+        send_message($token, $chatId, 'Mini ilovadan noto\'g\'ri ma\'lumot keldi.');
+        return;
+    }
+
+    $action = $decoded['type'] ?? '';
+    switch ($action) {
+        case 'income':
+            $amountInput = $decoded['amount'] ?? '';
+            $amount = is_numeric($amountInput) ? (float) $amountInput : normalize_amount((string) $amountInput);
+            $date = $decoded['date'] ?? date('Y-m-d');
+            $method = $decoded['payment_method'] ?? '';
+            $comment = trim((string) ($decoded['comment'] ?? ''));
+
+            $dateParsed = parse_date_input((string) $date) ?? $date;
+
+            $payload = [
+                'type' => 'income',
+                'amount' => $amount,
+                'date' => $dateParsed,
+                'payment_method' => $method,
+                'comment' => $comment,
+            ];
+
+            if ($amount === null || $amount <= 0 || !in_array($method, ['cash', 'click'], true)) {
+                send_message($token, $chatId, 'Mini ilova: ma\'lumotlar to\'liq emas.');
+                return;
+            }
+
+            if (!persist_transaction($conn, $payload)) {
+                send_message($token, $chatId, 'Mini ilova: daromadni saqlashda xatolik yuz berdi.');
+                return;
+            }
+
+            $methodLabel = $method === 'cash' ? 'Naqd' : 'Click';
+            $dateObj = DateTime::createFromFormat('Y-m-d', $payload['date']);
+            if (!$dateObj) {
+                $dateObj = new DateTime($payload['date']);
+            }
+            $dateLabel = $dateObj->format('d.m.Y');
+            $message = sprintf(
+                "<b>Mini ilova orqali daromad qo'shildi</b>\n\nSumma: %s so'm\nSana: %s\nUsul: %s%s",
+                format_currency((float) $amount),
+                $dateLabel,
+                $methodLabel,
+                $comment !== '' ? "\nIzoh: " . html_escape($comment) : ''
+            );
+            send_message($token, $chatId, $message, ['parse_mode' => 'HTML']);
+            clear_conversation($conn, $chatId);
+            send_main_menu($token, $chatId);
+            return;
+
+        case 'expense':
+            $amountInput = $decoded['amount'] ?? '';
+            $amount = is_numeric($amountInput) ? (float) $amountInput : normalize_amount((string) $amountInput);
+            $date = $decoded['date'] ?? date('Y-m-d');
+            $method = $decoded['payment_method'] ?? '';
+            $comment = trim((string) ($decoded['comment'] ?? ''));
+            $categoryId = isset($decoded['category_id']) ? (int) $decoded['category_id'] : 0;
+
+            $dateParsed = parse_date_input((string) $date) ?? $date;
+
+            if ($amount === null || $amount <= 0 || !in_array($method, ['cash', 'click'], true) || $categoryId <= 0) {
+                send_message($token, $chatId, 'Mini ilova: ma\'lumotlar to\'liq emas.');
+                return;
+            }
+
+            $categoryName = fetch_category_name($conn, $categoryId);
+            if ($categoryName === null) {
+                send_message($token, $chatId, 'Mini ilova: tanlangan turkum topilmadi.');
+                return;
+            }
+
+            $payload = [
+                'type' => 'expense',
+                'amount' => $amount,
+                'date' => $dateParsed,
+                'payment_method' => $method,
+                'comment' => $comment,
+                'category_id' => $categoryId,
+                'category_name' => $categoryName,
+            ];
+
+            if (!persist_transaction($conn, $payload)) {
+                send_message($token, $chatId, 'Mini ilova: xarajatni saqlashda xatolik yuz berdi.');
+                return;
+            }
+
+            $methodLabel = $method === 'cash' ? 'Naqd' : 'Click';
+            $dateObj = DateTime::createFromFormat('Y-m-d', $payload['date']);
+            if (!$dateObj) {
+                $dateObj = new DateTime($payload['date']);
+            }
+            $dateLabel = $dateObj->format('d.m.Y');
+            $message = sprintf(
+                "<b>Mini ilova orqali xarajat qo'shildi</b>\n\nSumma: %s so'm\nSana: %s\nUsul: %s\nTurkum: %s%s",
+                format_currency((float) $amount),
+                $dateLabel,
+                $methodLabel,
+                html_escape($categoryName),
+                $comment !== '' ? "\nIzoh: " . html_escape($comment) : ''
+            );
+            send_message($token, $chatId, $message, ['parse_mode' => 'HTML']);
+            clear_conversation($conn, $chatId);
+            send_main_menu($token, $chatId);
+            return;
+
+        case 'report':
+            clear_conversation($conn, $chatId);
+            send_monthly_report($conn, $token, $chatId);
+            return;
+
+        default:
+            send_message($token, $chatId, 'Mini ilova buyruqni tushunmadi.');
+    }
 }
 
 function persist_transaction(mysqli $conn, array $payload): bool
