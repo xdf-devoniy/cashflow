@@ -1,348 +1,731 @@
 <?php
 session_start();
+
 $password = 'iyul0624';
 
-// Check if the user has already been authenticated via a cookie
 if (!isset($_SESSION['authenticated']) && isset($_COOKIE['authenticated']) && $_COOKIE['authenticated'] === 'true') {
     $_SESSION['authenticated'] = true;
 }
 
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['password'])) {
-    if ($_POST['password'] === $password) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['password'])) {
+    if (hash_equals($password, $_POST['password'])) {
         $_SESSION['authenticated'] = true;
-        setcookie('authenticated', 'true', time() + (30 * 24 * 60 * 60)); // Set cookie for 30 days
+        setcookie('authenticated', 'true', time() + (30 * 24 * 60 * 60));
     } else {
-        $error = 'Incorrect password. Please try again.';
+        $error = 'Parol noto\'g\'ri. Iltimos, qayta urinib ko\'ring.';
     }
 }
 
 if (!isset($_SESSION['authenticated']) || $_SESSION['authenticated'] !== true) {
     ?>
     <!DOCTYPE html>
-    <html>
+    <html lang="uz">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet">
-        <title>Login</title>
-        <style>
-            .card {
-                max-width: 100%;
-                margin-top: 20vh;
+        <title>Cashflow tizimiga kirish</title>
+        <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio"></script>
+        <script>
+            tailwind.config = {
+                theme: {
+                    extend: {
+                        fontFamily: {
+                            sans: ['Inter', 'system-ui', 'sans-serif']
+                        },
+                        colors: {
+                            indigo: {
+                                950: '#0f172a'
+                            }
+                        }
+                    }
+                }
             }
-        </style>
+        </script>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     </head>
-    <body>
-    <div class="container d-flex justify-content-center align-items-center min-vh-100">
-        <div class="card w-100" style="max-width: 400px;">
-            <div class="card-header text-center bg-primary text-white">
-                <h4>Please Enter Password</h4>
+    <body class="min-h-screen bg-slate-950 bg-gradient-to-br from-slate-900 via-slate-900/70 to-indigo-950 text-slate-100">
+    <div class="relative min-h-screen flex items-center justify-center px-4 py-12">
+        <div class="absolute inset-0 overflow-hidden pointer-events-none">
+            <div class="absolute -top-32 -left-24 h-72 w-72 rounded-full bg-indigo-500/40 blur-3xl"></div>
+            <div class="absolute bottom-0 right-0 h-96 w-96 rounded-full bg-emerald-500/30 blur-3xl"></div>
+        </div>
+        <div class="relative max-w-md w-full space-y-8 rounded-3xl border border-white/10 bg-white/10 p-10 backdrop-blur-xl shadow-2xl">
+            <div class="text-center space-y-2">
+                <p class="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1 text-xs font-medium uppercase tracking-widest">Oxford LC Cashflow</p>
+                <h1 class="text-3xl font-semibold text-white">Tizimga kirish</h1>
+                <p class="text-sm text-slate-200/80">Iltimos, xavfsiz kirish uchun parolni kiriting.</p>
             </div>
-            <div class="card-body">
-                <?php if (isset($error)): ?>
-                    <div class="alert alert-danger"><?php echo $error; ?></div>
-                <?php endif; ?>
-                <form action="index.php" method="post" class="needs-validation" novalidate>
-                    <div class="mb-3">
-                        <input type="password" class="form-control" name="password" placeholder="Password" required>
-                        <div class="invalid-feedback">Please enter your password.</div>
-                    </div>
-                    <button type="submit" class="btn btn-primary w-100">Submit</button>
-                </form>
-            </div>
+            <?php if (isset($error)): ?>
+                <div class="rounded-xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                    <?= htmlspecialchars($error) ?>
+                </div>
+            <?php endif; ?>
+            <form method="post" class="space-y-6">
+                <div>
+                    <label for="password" class="block text-sm font-medium text-slate-200">Parol</label>
+                    <input type="password" id="password" name="password" required autocomplete="current-password" class="mt-2 block w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm text-white placeholder:text-slate-300/60 shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-400/50">
+                </div>
+                <button type="submit" class="w-full rounded-xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-emerald-950 shadow-lg shadow-emerald-500/30 transition hover:bg-emerald-400">Kirish</button>
+            </form>
+            <p class="text-center text-xs text-slate-200/70">Geolokatsiya cheklovidan tashqarida bo'lsangiz, tizimga kirgandan so'ng qo'riqlash oynasida "Rasul777" parolini kiriting.</p>
         </div>
     </div>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        (function () {
-            'use strict';
-            var forms = document.querySelectorAll('.needs-validation');
-            Array.prototype.slice.call(forms).forEach(function (form) {
-                form.addEventListener('submit', function (event) {
-                    if (!form.checkValidity()) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                    }
-                    form.classList.add('was-validated');
-                }, false);
-            });
-        })();
-    </script>
     </body>
     </html>
     <?php
     exit();
 }
 
-date_default_timezone_set('Asia/Tashkent'); // Set timezone to Tashkent
+date_default_timezone_set('Asia/Tashkent');
 
-function format_number($number) {
+require_once 'db.php';
+
+function format_number($number)
+{
     if ($number == intval($number)) {
-        return number_format($number);
+        return number_format($number, 0, '.', ' ');
+    }
+    return number_format($number, 2, '.', ' ');
+}
+
+$current_date = $_GET['date'] ?? date('Y-m-d');
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $current_date)) {
+    $current_date = date('Y-m-d');
+}
+
+$transactions = [];
+$dailyTotals = [
+    'income' => 0.0,
+    'expense' => 0.0,
+    'cashIncome' => 0.0,
+    'cashExpense' => 0.0,
+    'clickIncome' => 0.0,
+    'clickExpense' => 0.0,
+];
+
+$dailyQuery = $conn->prepare('SELECT id, payment, comment, cash, click, cash_in, cash_out, xarajat, date FROM transactions WHERE date = ? ORDER BY id DESC');
+if ($dailyQuery) {
+    $dailyQuery->bind_param('s', $current_date);
+    if ($dailyQuery->execute()) {
+        $result = $dailyQuery->get_result();
+        while ($row = $result->fetch_assoc()) {
+            $row['payment'] = (float)$row['payment'];
+            $transactions[] = $row;
+            if ((int)$row['cash_in'] === 1) {
+                $dailyTotals['income'] += $row['payment'];
+                if ((int)$row['cash'] === 1) {
+                    $dailyTotals['cashIncome'] += $row['payment'];
+                }
+                if ((int)$row['click'] === 1) {
+                    $dailyTotals['clickIncome'] += $row['payment'];
+                }
+            }
+            if ((int)$row['cash_out'] === 1) {
+                $dailyTotals['expense'] += $row['payment'];
+                if ((int)$row['cash'] === 1) {
+                    $dailyTotals['cashExpense'] += $row['payment'];
+                }
+                if ((int)$row['click'] === 1) {
+                    $dailyTotals['clickExpense'] += $row['payment'];
+                }
+            }
+        }
+        $result->free();
+    }
+    $dailyQuery->close();
+}
+
+$cashBalance = $dailyTotals['cashIncome'] - $dailyTotals['cashExpense'];
+$clickBalance = $dailyTotals['clickIncome'] - $dailyTotals['clickExpense'];
+
+$totals = [
+    'total_income' => 0,
+    'total_expense' => 0,
+    'total_income_cash' => 0,
+    'total_income_click' => 0,
+    'total_expense_cash' => 0,
+    'total_expense_click' => 0,
+    'monthly_income' => 0,
+    'monthly_expense' => 0,
+];
+
+$totalsSql = "SELECT
+        COALESCE(SUM(CASE WHEN cash_in = 1 THEN payment END), 0) AS total_income,
+        COALESCE(SUM(CASE WHEN cash_out = 1 THEN payment END), 0) AS total_expense,
+        COALESCE(SUM(CASE WHEN cash_in = 1 AND cash = 1 THEN payment END), 0) AS total_income_cash,
+        COALESCE(SUM(CASE WHEN cash_in = 1 AND click = 1 THEN payment END), 0) AS total_income_click,
+        COALESCE(SUM(CASE WHEN cash_out = 1 AND cash = 1 THEN payment END), 0) AS total_expense_cash,
+        COALESCE(SUM(CASE WHEN cash_out = 1 AND click = 1 THEN payment END), 0) AS total_expense_click,
+        COALESCE(SUM(CASE WHEN cash_in = 1 AND date >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN payment END), 0) AS monthly_income,
+        COALESCE(SUM(CASE WHEN cash_out = 1 AND date >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN payment END), 0) AS monthly_expense
+    FROM transactions";
+
+if ($totalsResult = $conn->query($totalsSql)) {
+    $row = $totalsResult->fetch_assoc();
+    if ($row) {
+        foreach ($row as $key => $value) {
+            $totals[$key] = (float)$value;
+        }
+    }
+    $totalsResult->free();
+}
+
+$overallBalance = $totals['total_income'] - $totals['total_expense'];
+$overallMonthlyBalance = $totals['monthly_income'] - $totals['monthly_expense'];
+
+$trendRows = [];
+$trendSql = "SELECT date,
+        SUM(CASE WHEN cash_in = 1 THEN payment ELSE 0 END) AS income,
+        SUM(CASE WHEN cash_out = 1 THEN payment ELSE 0 END) AS expense
+    FROM transactions
+    GROUP BY date
+    ORDER BY date DESC
+    LIMIT 14";
+
+if ($trendResult = $conn->query($trendSql)) {
+    while ($row = $trendResult->fetch_assoc()) {
+        $trendRows[] = [
+            'date' => $row['date'],
+            'income' => (float)$row['income'],
+            'expense' => (float)$row['expense'],
+        ];
+    }
+    $trendResult->free();
+}
+$trendRows = array_reverse($trendRows);
+
+$filterStartRaw = $_GET['filter_start_date'] ?? '';
+$filterEndRaw = $_GET['filter_end_date'] ?? '';
+$filterErrors = [];
+$filteredExpenses = [];
+$filteredTotal = 0.0;
+$filterRange = null;
+
+if ($filterStartRaw !== '' || $filterEndRaw !== '') {
+    $startDate = DateTime::createFromFormat('Y-m-d', $filterStartRaw) ?: null;
+    $endDate = DateTime::createFromFormat('Y-m-d', $filterEndRaw) ?: null;
+
+    if (!$startDate || !$endDate) {
+        $filterErrors[] = 'Sanani to\'g\'ri kiriting (YYYY-MM-DD).';
     } else {
-        return number_format($number, 2);
+        if ($startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
+        $filterRange = [
+            'start' => $startDate->format('Y-m-d'),
+            'end' => $endDate->format('Y-m-d'),
+        ];
+
+        $filterStmt = $conn->prepare('SELECT id, payment, comment, cash, click, date FROM transactions WHERE xarajat = 1 AND date BETWEEN ? AND ? ORDER BY date DESC, id DESC');
+        if ($filterStmt) {
+            $filterStmt->bind_param('ss', $filterRange['start'], $filterRange['end']);
+            if ($filterStmt->execute()) {
+                $result = $filterStmt->get_result();
+                while ($row = $result->fetch_assoc()) {
+                    $row['payment'] = (float)$row['payment'];
+                    $filteredTotal += $row['payment'];
+                    $filteredExpenses[] = $row;
+                }
+                $result->free();
+            }
+            $filterStmt->close();
+        }
     }
 }
 
-include 'db.php';
-$current_date = isset($_GET['date']) ? $_GET['date'] : date('Y-m-d');
+$currentDateLabel = (new DateTime($current_date))->format('d.m.Y');
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="uz">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
-    <title>Cash Management</title>
-    <style>
-        .bouncing-letter {
-            display: inline-block;
-            animation: bounceApple 0.6s cubic-bezier(0.25, 1.5, 0.5, 1) forwards;
-            will-change: transform;
-        }
-
-        @keyframes bounceApple {
-            0% {
-                transform: translateY(0);
-                color: yellow;
-            }
-            30% {
-                transform: translateY(-10px);
-                color: #cdcd00;
-            }
-            60% {
-                transform: translateY(5px);
-                color: #838333;
-            }
-            100% {
-                transform: translateY(0);
+    <title>Oxford LC — Cashflow</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    colors: {
+                        oxford: {
+                            50: '#f0f7ff',
+                            100: '#dceeff',
+                            500: '#2563eb',
+                            600: '#1d4ed8',
+                            900: '#0f172a'
+                        },
+                    },
+                    boxShadow: {
+                        glass: '0 20px 45px -20px rgba(15, 23, 42, 0.4)'
+                    }
+                }
             }
         }
-    </style>
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js" defer></script>
 </head>
-<body>
-<div class="container mt-4">
-    <h2 id="bouncing-letter" class="my-4 text-center bouncing-letter">OXFORD LC</h2><!-- <a href="https://harvardsystem.uz/kirimchiqim/kids/">kids</a>-->
-
-    <div class="d-flex justify-content-between mb-3">
-        <button id="prevDate" class="btn btn-secondary">&lt; Oldingi Kun</button>
-        <h4 id="currentDate" class="text-center mb-2 mb-sm-0"><?= $current_date ?></h4>
-        <button id="nextDate" class="btn btn-secondary">Keyingi Kun &gt;</button>
+<body class="min-h-screen bg-gradient-to-br from-oxford-50 via-white to-sky-50 font-sans text-slate-900">
+<div class="relative">
+    <div class="pointer-events-none absolute inset-0 overflow-hidden">
+        <div class="absolute -top-32 -left-24 h-72 w-72 rounded-full bg-sky-400/30 blur-3xl"></div>
+        <div class="absolute bottom-0 -right-40 h-96 w-96 rounded-full bg-emerald-300/30 blur-3xl"></div>
     </div>
-
-    <div class="table-responsive">
-        <table class="table table-bordered">
-            <thead class="thead-light">
-            <tr>
-                <th>To'lov</th>
-                <th>Comment</th>
-                <th class="small-cell">Naqd</th>
-                <th class="small-cell">Click</th>
-            </tr>
-            </thead>
-            <tbody>
-            <?php
-            $sql = "SELECT * FROM transactions WHERE date = '$current_date'";
-            $result = $conn->query($sql);
-            $total_cash_in = 0;
-            $total_cash_out = 0;
-            $total_cash = 0;
-            $total_click = 0;
-            $total_click_out = 0;
-            $total_cash_out_cash = 0;
-            $total_cash_out_click = 0;
-
-            if ($result->num_rows > 0) {
-                while($row = $result->fetch_assoc()) {
-                    $payment = format_number($row['payment']);
-                    $comment = $row['comment'];
-                    $cash = $row['cash'];
-                    $click = $row['click'];
-                    $cash_in = $row['cash_in'];
-                    $cash_out = !$cash_in;
-
-                    $total_cash_in += $cash_in ? $row['payment'] : 0;
-                    $total_cash_out += $cash_out ? $row['payment'] : 0;
-
-                    if ($cash && $cash_in) {
-                        $total_cash += $row['payment'];
-                    }
-
-                    if ($click && $cash_in) {
-                        $total_click += $row['payment'];
-                    }
-
-                    if ($cash && $cash_out) {
-                        $total_cash_out_cash += $row['payment'];
-                    }
-
-                    if ($click && $cash_out) {
-                        $total_click_out += $row['payment'];
-                    }
-
-                    echo "<tr>";
-                    echo "<td class='long-cell' style='color: " . ($cash_in ? 'black' : 'red') . "'>$payment</td>";
-                    echo "<td class='long-cell'>$comment</td>";
-                    echo "<td class='small-cell' style='background-color: " . ($cash ? 'green' : 'transparent') . "'></td>";
-                    echo "<td class='small-cell' style='background-color: " . ($click ? 'green' : 'transparent') . "'></td>";
-                    echo "</tr>";
-                }
-            } else {
-                echo "<tr><td colspan='4'>No records found for today.</td></tr>";
-            }
-
-            $cash_rest = $total_cash - $total_cash_out_cash;
-            $click_rest = $total_click - $total_click_out;
-            $total_both = $cash_rest + $click_rest;
-            ?>
-            </tbody>
-            <tfoot>
-            <tr>
-                <th colspan="4">Statistics</th>
-            </tr>
-            <tr>
-                <td>Umumiy Kirim: <?= format_number($total_cash_in) ?></td>
-                <td>Umumiy Chiqim: <?= format_number($total_cash_out) ?></td>
-                <td>Umumiy Qoldi: <?= format_number($total_cash_in - $total_cash_out) ?></td>
-                <td></td>
-            </tr>
-            <tr>
-                <td>Naqd Kirim: <?= format_number($total_cash) ?></td>
-                <td>Click Kirim: <?= format_number($total_click) ?></td>
-                <td></td>
-                <td></td>
-            </tr>
-            <tr>
-                <td>Naqd Chiqim  (Cash): <?= format_number($total_cash_out_cash) ?></td>
-                <td>Click Chiqim (Click): <?= format_number($total_click_out) ?></td>
-                <td></td>
-                <td></td>
-            </tr>
-            <tr>
-                <td>Naqd Qoldiq: <?= format_number($cash_rest) ?></td>
-                <td>Click Qoldiq: <?= format_number($click_rest) ?></td>
-                <td>Umumiy Qoldi: <?= format_number($total_both) ?></td>
-                <td></td>
-            </tr>
-            </tfoot>
-        </table>
-    </div>
-
-    <button class="btn btn-success btn-lg rounded-circle position-fixed bottom-0 end-0 m-4" data-bs-toggle="modal" data-bs-target="#exampleModal">+</button>
-
-    <!-- Modal -->
-    <div class="modal fade" id="exampleModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="exampleModalLabel">Tranzaksiya Qo'shish</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    <div class="relative mx-auto flex min-h-screen max-w-7xl flex-col gap-10 px-4 pb-16 pt-10 sm:px-6 lg:px-8">
+        <header class="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">Bugungi holat</p>
+                <h1 class="text-3xl font-semibold text-oxford-900 sm:text-4xl">Oxford LC — Cashflow boshqaruvi</h1>
+                <p class="mt-2 max-w-2xl text-sm text-slate-600">Naqd va Click tushumlarini real vaqt rejimida kuzatib boring, xarajatlarni boshqaring va har bir kunning balansini tahlil qiling.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+                <button type="button" class="group inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-oxford-500 hover:text-oxford-600" data-action="date" data-direction="prev" data-current-date="<?= htmlspecialchars($current_date) ?>">
+                    <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-oxford-500/10 text-oxford-600 transition group-hover:bg-oxford-500/20">‹</span>
+                    Oldingi kun
+                </button>
+                <div class="rounded-full bg-white/70 px-5 py-2 text-center text-sm font-semibold text-oxford-600 shadow-sm backdrop-blur">
+                    <span id="currentDate" data-date="<?= htmlspecialchars($current_date) ?>"><?= htmlspecialchars($currentDateLabel) ?></span>
                 </div>
-                <div class="modal-body">
-                    <form action="process.php" method="post" onsubmit="return validateForm()" class="needs-validation" novalidate>
-                        <div class="mb-3">
-                            <label for="payment" class="form-label">To'lov miqdori</label>
-                            <input type="number" class="form-control" id="payment" name="payment" required>
-                            <div class="invalid-feedback">Please enter the payment amount.</div>
-                        </div>
-                        <p>To'lov Turi:</p>
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input" id="cash" name="cash" onchange="toggleCheck('cash', 'click')">
-                            <label class="form-check-label" for="cash">Naqd</label>
-                        </div>
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input" id="click" name="click" onchange="toggleCheck('click', 'cash')">
-                            <label class="form-check-label" for="click">Click</label>
-                        </div>
-                        <p style="margin-top:10px">Tranzaksiya turi:</p>
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input" id="cash_in" name="cash_in" onchange="toggleCheck('cash_in', 'cash_out')">
-                            <label class="form-check-label" for="cash_in">Kirim</label>
-                        </div>
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input" id="cash_out" name="cash_out" onchange="toggleCheck('cash_out', 'cash_in')">
-                            <label class="form-check-label" for="cash_out">Chiqim</label>
-                        </div>
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input" id="xarajat" name="xarajat" onclick="toggleXarajat();">
-                            <label class="form-check-label" for="xarajat"><span style="color: red; font-weight: bold;">Xarajat</span></label>
-                        </div>
-                        <div class="mb-3">
-                            <label for="comment" class="form-label">Comment</label>
-                            <textarea class="form-control" id="comment" name="comment" rows="3"></textarea>
-                        </div>
-                        <button type="submit" class="btn btn-primary w-100">Tayyor!</button>
-                    </form>
+                <button type="button" class="group inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-oxford-500 hover:text-oxford-600" data-action="date" data-direction="next" data-current-date="<?= htmlspecialchars($current_date) ?>">
+                    Keyingi kun
+                    <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-oxford-500/10 text-oxford-600 transition group-hover:bg-oxford-500/20">›</span>
+                </button>
+            </div>
+        </header>
+
+        <section class="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+            <article class="rounded-3xl border border-white/60 bg-white/80 p-6 shadow-glass backdrop-blur">
+                <p class="text-xs font-medium uppercase tracking-widest text-slate-500">Umumiy tushum</p>
+                <h2 class="mt-3 text-3xl font-semibold text-oxford-900"><?= format_number($totals['total_income']) ?> so'm</h2>
+                <p class="mt-2 flex items-center gap-2 text-sm text-emerald-600"><span class="inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>Naqd: <?= format_number($totals['total_income_cash']) ?> — Click: <?= format_number($totals['total_income_click']) ?></p>
+            </article>
+            <article class="rounded-3xl border border-white/60 bg-white/80 p-6 shadow-glass backdrop-blur">
+                <p class="text-xs font-medium uppercase tracking-widest text-slate-500">Umumiy xarajat</p>
+                <h2 class="mt-3 text-3xl font-semibold text-oxford-900"><?= format_number($totals['total_expense']) ?> so'm</h2>
+                <p class="mt-2 flex items-center gap-2 text-sm text-rose-600"><span class="inline-flex h-2 w-2 rounded-full bg-rose-500"></span>Naqd: <?= format_number($totals['total_expense_cash']) ?> — Click: <?= format_number($totals['total_expense_click']) ?></p>
+            </article>
+            <article class="rounded-3xl border border-white/60 bg-gradient-to-br from-oxford-500 to-indigo-500 p-6 text-white shadow-glass">
+                <p class="text-xs font-medium uppercase tracking-widest text-white/70">Umumiy balans</p>
+                <h2 class="mt-3 text-3xl font-semibold">
+                    <?= format_number($overallBalance) ?> so'm
+                </h2>
+                <p class="mt-2 text-sm text-white/80">Oylik balans: <?= format_number($overallMonthlyBalance) ?> so'm</p>
+            </article>
+            <article class="rounded-3xl border border-white/60 bg-white/80 p-6 shadow-glass backdrop-blur">
+                <p class="text-xs font-medium uppercase tracking-widest text-slate-500">Bugungi qoldiq</p>
+                <h2 class="mt-3 text-3xl font-semibold text-oxford-900"><?= format_number($cashBalance + $clickBalance) ?> so'm</h2>
+                <p class="mt-2 flex flex-col gap-1 text-sm text-slate-600">
+                    <span>Naqd: <?= format_number($cashBalance) ?> so'm</span>
+                    <span>Click: <?= format_number($clickBalance) ?> so'm</span>
+                </p>
+            </article>
+        </section>
+
+        <section class="grid gap-6 lg:grid-cols-3">
+            <div class="lg:col-span-2 space-y-6">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-lg font-semibold text-oxford-900">Kunlik tranzaksiyalar</h2>
+                    <button type="button" id="open-transaction" class="inline-flex items-center gap-2 rounded-full bg-oxford-500 px-4 py-2 text-sm font-semibold text-white shadow-glass transition hover:bg-oxford-600">
+                        + Tranzaksiya qo'shish
+                    </button>
+                </div>
+                <div class="overflow-hidden rounded-3xl border border-white/70 bg-white/80 shadow-glass">
+                    <table class="min-w-full divide-y divide-slate-200/70">
+                        <thead class="bg-white/80">
+                        <tr>
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-slate-500">Summa</th>
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-slate-500">Izoh</th>
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-slate-500">To'lov turi</th>
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-widest text-slate-500">Yo'nalish</th>
+                        </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100/70">
+                        <?php if (empty($transactions)): ?>
+                            <tr>
+                                <td colspan="4" class="px-4 py-6 text-center text-sm text-slate-500">Ushbu kunda tranzaksiya topilmadi.</td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($transactions as $transaction): ?>
+                                <?php
+                                $isIncome = (int)$transaction['cash_in'] === 1;
+                                $method = (int)$transaction['cash'] === 1 ? 'Naqd' : ((int)$transaction['click'] === 1 ? 'Click' : '');
+                                $directionBadge = $isIncome ? 'bg-emerald-500/10 text-emerald-600' : 'bg-rose-500/10 text-rose-600';
+                                $methodBadge = $method === 'Naqd' ? 'bg-yellow-500/10 text-amber-600' : 'bg-sky-500/10 text-sky-600';
+                                ?>
+                                <tr class="hover:bg-slate-50/60 transition">
+                                    <td class="whitespace-nowrap px-4 py-4 text-sm font-medium <?= $isIncome ? 'text-emerald-600' : 'text-rose-600' ?>"><?= format_number($transaction['payment']) ?> so'm</td>
+                                    <td class="px-4 py-4 text-sm text-slate-600"><?= htmlspecialchars($transaction['comment'] ?? '') ?></td>
+                                    <td class="px-4 py-4 text-sm">
+                                        <?php if ($method !== ''): ?>
+                                            <span class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold <?= $methodBadge ?>">
+                                                <?= $method ?>
+                                            </span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="px-4 py-4 text-sm">
+                                        <span class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold <?= $directionBadge ?>">
+                                            <?= $isIncome ? 'Kirim' : 'Chiqim' ?>
+                                        </span>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                        </tbody>
+                    </table>
                 </div>
             </div>
+            <aside class="space-y-6">
+                <div class="rounded-3xl border border-white/70 bg-white/80 p-6 shadow-glass">
+                    <h3 class="text-base font-semibold text-oxford-900">Kunlik statistikalar</h3>
+                    <dl class="mt-4 space-y-3 text-sm text-slate-600">
+                        <div class="flex items-center justify-between">
+                            <dt>Kirimlar</dt>
+                            <dd class="font-semibold text-emerald-600"><?= format_number($dailyTotals['income']) ?> so'm</dd>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <dt>Chiqimlar</dt>
+                            <dd class="font-semibold text-rose-600"><?= format_number($dailyTotals['expense']) ?> so'm</dd>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <dt>Kunlik balans</dt>
+                            <dd class="font-semibold text-oxford-900"><?= format_number($dailyTotals['income'] - $dailyTotals['expense']) ?> so'm</dd>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <dt>Naqd qoldiq</dt>
+                            <dd class="font-medium text-slate-700"><?= format_number($cashBalance) ?> so'm</dd>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <dt>Click qoldiq</dt>
+                            <dd class="font-medium text-slate-700"><?= format_number($clickBalance) ?> so'm</dd>
+                        </div>
+                    </dl>
+                    <div class="mt-5 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 p-4 text-xs text-emerald-700">
+                        So'nggi yangilanish: <?= htmlspecialchars(date('d.m.Y H:i')) ?>
+                    </div>
+                </div>
+                <div class="rounded-3xl border border-white/70 bg-white/80 p-6 shadow-glass">
+                    <h3 class="text-base font-semibold text-oxford-900">12 kunlik tendensiya</h3>
+                    <p class="mt-1 text-xs text-slate-500">Naqd va Click tushumlari hamda xarajatlar dinamikasi.</p>
+                    <canvas id="trendChart" class="mt-4 h-48 w-full"></canvas>
+                </div>
+            </aside>
+        </section>
+
+        <section class="grid gap-6 lg:grid-cols-3">
+            <div class="rounded-3xl border border-white/70 bg-white/80 p-6 shadow-glass lg:col-span-1">
+                <h2 class="text-lg font-semibold text-oxford-900">Xarajatlar uchun filtr</h2>
+                <p class="mt-1 text-sm text-slate-600">Kerakli davrni tanlab, "O'qituvchilar oyligi" kabi xarajatlarni saralab ko'ring.</p>
+                <?php if (!empty($filterErrors)): ?>
+                    <div class="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-600">
+                        <?php foreach ($filterErrors as $message): ?>
+                            <p><?= htmlspecialchars($message) ?></p>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+                <form method="get" class="mt-6 space-y-5">
+                    <div>
+                        <label for="filter_start_date" class="text-xs font-semibold uppercase tracking-widest text-slate-500">Boshlanish sanasi</label>
+                        <input type="date" id="filter_start_date" name="filter_start_date" value="<?= htmlspecialchars($filterRange['start'] ?? $filterStartRaw) ?>" class="mt-2 block w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-inner focus:border-oxford-500 focus:ring-oxford-500">
+                    </div>
+                    <div>
+                        <label for="filter_end_date" class="text-xs font-semibold uppercase tracking-widest text-slate-500">Tugash sanasi</label>
+                        <input type="date" id="filter_end_date" name="filter_end_date" value="<?= htmlspecialchars($filterRange['end'] ?? $filterEndRaw) ?>" class="mt-2 block w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-inner focus:border-oxford-500 focus:ring-oxford-500">
+                    </div>
+                    <button type="submit" class="w-full rounded-xl bg-oxford-500 px-4 py-3 text-sm font-semibold text-white shadow-glass transition hover:bg-oxford-600">Filtrlash</button>
+                    <a href="index.php" class="block text-center text-xs font-semibold text-slate-400 transition hover:text-oxford-500">Filtrni tozalash</a>
+                </form>
+                <?php if ($filterRange): ?>
+                    <div class="mt-6 rounded-2xl bg-emerald-500/10 p-4 text-xs text-emerald-700">
+                        Tanlangan davr: <?= htmlspecialchars($filterRange['start']) ?> — <?= htmlspecialchars($filterRange['end']) ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+            <div class="lg:col-span-2 space-y-6">
+                <div class="rounded-3xl border border-white/70 bg-white/80 shadow-glass">
+                    <div class="flex items-center justify-between px-6 py-4">
+                        <div>
+                            <h3 class="text-base font-semibold text-oxford-900">Xarajatlar jadvali</h3>
+                            <p class="text-xs text-slate-500">Tanlangan davrdagi barcha xarajatlar ro'yxati.</p>
+                        </div>
+                        <div class="rounded-full bg-rose-500/10 px-4 py-1 text-xs font-semibold text-rose-600">
+                            Jami: <?= format_number($filteredTotal) ?> so'm
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-slate-200/70">
+                            <thead class="bg-white/80 text-xs uppercase tracking-widest text-slate-500">
+                            <tr>
+                                <th class="px-4 py-3 text-left font-semibold">Sana</th>
+                                <th class="px-4 py-3 text-left font-semibold">Summa</th>
+                                <th class="px-4 py-3 text-left font-semibold">Izoh</th>
+                                <th class="px-4 py-3 text-left font-semibold">To'lov</th>
+                            </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100/70 text-sm text-slate-600">
+                            <?php if (empty($filteredExpenses) && $filterRange): ?>
+                                <tr>
+                                    <td colspan="4" class="px-4 py-6 text-center text-sm text-slate-400">Tanlangan davr uchun xarajat topilmadi.</td>
+                                </tr>
+                            <?php elseif (empty($filteredExpenses)): ?>
+                                <tr>
+                                    <td colspan="4" class="px-4 py-6 text-center text-sm text-slate-400">Davr tanlang va natijalarni ko'ring.</td>
+                                </tr>
+                            <?php else: ?>
+                                <?php foreach ($filteredExpenses as $expense): ?>
+                                    <tr class="hover:bg-slate-50/60 transition">
+                                        <td class="whitespace-nowrap px-4 py-4 text-xs font-semibold text-slate-500"><?= htmlspecialchars((new DateTime($expense['date']))->format('d.m.Y')) ?></td>
+                                        <td class="px-4 py-4 text-sm font-semibold text-rose-600"><?= format_number($expense['payment']) ?> so'm</td>
+                                        <td class="px-4 py-4 text-sm"><?= htmlspecialchars($expense['comment'] ?? '') ?></td>
+                                        <td class="px-4 py-4 text-sm">
+                                            <?php if ((int)$expense['cash'] === 1): ?>
+                                                <span class="inline-flex items-center rounded-full bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-600">Naqd</span>
+                                            <?php elseif ((int)$expense['click'] === 1): ?>
+                                                <span class="inline-flex items-center rounded-full bg-sky-500/10 px-3 py-1 text-xs font-semibold text-sky-600">Click</span>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+
+<div id="transaction-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-slate-900/50 px-4 py-10 backdrop-blur-sm">
+    <div class="w-full max-w-xl rounded-3xl border border-white/70 bg-white p-8 shadow-2xl">
+        <div class="flex items-start justify-between gap-6">
+            <div>
+                <h2 class="text-xl font-semibold text-oxford-900">Yangi tranzaksiya</h2>
+                <p class="mt-1 text-sm text-slate-500">Kirim yoki chiqimni tanlang, to'lov usulini ko'rsating.</p>
+            </div>
+            <button type="button" id="close-transaction" class="rounded-full bg-slate-100 p-2 text-slate-500 transition hover:bg-slate-200 hover:text-slate-700">✕</button>
         </div>
-    </div>
-
-    <!-- Filter by date -->
-    <div class="mt-4">
-        <h4>Filter by Date for Xarajat</h4>
-        <form method="get" action="index.php">
-            <div class="mb-3">
-                <label for="filter_start_date" class="form-label">From Date:</label>
-                <input type="date" class="form-control" id="filter_start_date" name="filter_start_date">
+        <form action="process.php" method="post" class="mt-8 space-y-6" onsubmit="return validateTransaction()">
+            <div>
+                <label for="payment" class="text-xs font-semibold uppercase tracking-widest text-slate-500">To'lov miqdori</label>
+                <input type="number" step="0.01" id="payment" name="payment" required class="mt-2 block w-full rounded-xl border border-slate-200 px-4 py-3 text-sm shadow-inner focus:border-oxford-500 focus:ring-oxford-500">
             </div>
-            <div class="mb-3">
-                <label for="filter_end_date" class="form-label">To Date:</label>
-                <input type="date" class="form-control" id="filter_end_date" name="filter_end_date">
+            <div class="space-y-3">
+                <p class="text-xs font-semibold uppercase tracking-widest text-slate-500">To'lov turi</p>
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="group flex cursor-pointer flex-col items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm font-medium text-slate-600 transition hover:border-oxford-500 hover:text-oxford-600">
+                        <input type="checkbox" id="cash" name="cash" class="peer hidden" data-toggle="payment" data-target="click">
+                        <span class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-amber-500/10 text-amber-600 transition peer-checked:bg-amber-500 peer-checked:text-white">₮</span>
+                        <span>Naqd</span>
+                    </label>
+                    <label class="group flex cursor-pointer flex-col items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm font-medium text-slate-600 transition hover:border-oxford-500 hover:text-oxford-600">
+                        <input type="checkbox" id="click" name="click" class="peer hidden" data-toggle="payment" data-target="cash">
+                        <span class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-sky-500/10 text-sky-600 transition peer-checked:bg-sky-500 peer-checked:text-white">◎</span>
+                        <span>Click</span>
+                    </label>
+                </div>
             </div>
-            <button type="submit" class="btn btn-primary w-100">Filter</button>
+            <div class="space-y-3">
+                <p class="text-xs font-semibold uppercase tracking-widest text-slate-500">Tranzaksiya turi</p>
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="group flex cursor-pointer flex-col items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm font-medium text-slate-600 transition hover:border-emerald-500 hover:text-emerald-600">
+                        <input type="checkbox" id="cash_in" name="cash_in" class="peer hidden" data-toggle="direction" data-target="cash_out">
+                        <span class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 transition peer-checked:bg-emerald-500 peer-checked:text-white">↑</span>
+                        <span>Kirim</span>
+                    </label>
+                    <label class="group flex cursor-pointer flex-col items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm font-medium text-slate-600 transition hover:border-rose-500 hover:text-rose-600">
+                        <input type="checkbox" id="cash_out" name="cash_out" class="peer hidden" data-toggle="direction" data-target="cash_in">
+                        <span class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-rose-500/10 text-rose-600 transition peer-checked:bg-rose-500 peer-checked:text-white">↓</span>
+                        <span>Chiqim</span>
+                    </label>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <input type="checkbox" id="xarajat" name="xarajat" class="h-5 w-5 rounded border-slate-300 text-rose-500 focus:ring-rose-500">
+                <label for="xarajat" class="text-sm font-medium text-rose-600">Xarajat sifatida belgilash</label>
+            </div>
+            <div>
+                <label for="comment" class="text-xs font-semibold uppercase tracking-widest text-slate-500">Izoh</label>
+                <textarea id="comment" name="comment" rows="3" class="mt-2 block w-full rounded-xl border border-slate-200 px-4 py-3 text-sm shadow-inner focus:border-oxford-500 focus:ring-oxford-500" placeholder="Masalan: IELTS guruhi to'lovi"></textarea>
+            </div>
+            <div class="flex justify-end gap-3 pt-2">
+                <button type="button" id="cancel-transaction" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-500 transition hover:border-slate-300 hover:text-slate-700">Bekor qilish</button>
+                <button type="submit" class="rounded-xl bg-oxford-500 px-4 py-2 text-sm font-semibold text-white shadow-glass transition hover:bg-oxford-600">Saqlash</button>
+            </div>
         </form>
-        <div class="table-responsive mt-4">
-            <table class="table table-bordered">
-                <thead class="thead-light">
-                <tr>
-                    <th>To'lov</th>
-                    <th>Comment</th>
-                    <th class="small-cell">Naqd</th>
-                    <th class="small-cell">Click</th>
-                </tr>
-                </thead>
-                <tbody>
-                <?php
-                if (isset($_GET['filter_start_date']) && isset($_GET['filter_end_date'])) {
-                    $filter_start_date = $_GET['filter_start_date'];
-                    $filter_end_date = $_GET['filter_end_date'];
-                    $sql = "SELECT * FROM transactions WHERE date BETWEEN '$filter_start_date' AND '$filter_end_date' AND xarajat = 1";
-                    $result = $conn->query($sql);
-                    $total_xarajat = 0;
+    </div>
+</div>
 
-                    if ($result->num_rows > 0) {
-                        while($row = $result->fetch_assoc()) {
-                            $payment = format_number($row['payment']);
-                            $comment = $row['comment'];
-                            $cash = $row['cash'];
-                            $click = $row['click'];
-
-                            $total_xarajat += $row['payment'];
-
-                            echo "<tr>";
-                            echo "<td class='long-cell' style='color: red;'>$payment</td>";
-                            echo "<td class='long-cell'>$comment</td>";
-                            echo "<td class='small-cell' style='background-color: " . ($cash ? 'green' : 'transparent') . "'></td>";
-                            echo "<td class='small-cell' style='background-color: " . ($click ? 'green' : 'transparent') . "'></td>";
-                            echo "</tr>";
-                        }
-                    } else {
-                        echo "<tr><td colspan='4'>No records found for the selected date range.</td></tr>";
-                    }
-
-                    echo "<tr><td colspan='4'>Total Xarajat: " . format_number($total_xarajat) . "</td></tr>";
-                }
-                ?>
-                </tbody>
-            </table>
+<div id="geo-overlay" class="fixed inset-0 z-[60] hidden flex items-center justify-center bg-slate-900/75 px-4 py-10 text-white">
+    <div class="w-full max-w-xl space-y-6 rounded-3xl border border-white/10 bg-slate-900/70 p-8 shadow-2xl">
+        <div>
+            <h2 class="text-2xl font-semibold">Manzilni tasdiqlang</h2>
+            <p id="geo-msg" class="mt-2 text-sm text-slate-200">Kamera va geolokatsiyani yoqing, iltimos.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+            <button id="geo-try" class="flex-1 rounded-xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-emerald-950 shadow-glass transition hover:bg-emerald-400">Kamerani yoqish</button>
+            <button id="geo-cancel" class="rounded-xl border border-white/20 px-4 py-3 text-sm font-semibold text-white/80 transition hover:border-white/50 hover:text-white">Keyinroq</button>
+        </div>
+        <p class="text-xs text-slate-300/80">Kamera ruxsati berilmasa, qurilma galereyasi ochiladi. Surat avtomatik yuboriladi.</p>
+        <div class="rounded-2xl border border-white/10 bg-white/5 p-5">
+            <h3 class="text-sm font-semibold text-white">Geolokatsiyadan tashqaridamisiz?</h3>
+            <p class="mt-1 text-xs text-slate-200/80">Parol yordamida kirish imkonini ishga tushiring.</p>
+            <div class="mt-4 flex flex-col gap-3 sm:flex-row">
+                <input type="password" id="geo-password" placeholder="Maxfiy parol" class="flex-1 rounded-xl border border-white/20 bg-slate-900/60 px-4 py-3 text-sm text-white placeholder:text-slate-300 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-400/50">
+                <button id="geo-pass-submit" class="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100">Tasdiqlash</button>
+            </div>
+            <p id="geo-password-error" class="mt-2 hidden text-xs text-rose-300">Parol noto'g'ri. Qayta urinib ko'ring.</p>
         </div>
     </div>
 </div>
 
+<script>
+    const trendRows = <?= json_encode($trendRows) ?>;
+    document.addEventListener('DOMContentLoaded', () => {
+        const dateButtons = document.querySelectorAll('[data-action="date"]');
+        dateButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const direction = button.dataset.direction;
+                const current = button.dataset.currentDate;
+                const currentDate = new Date(current);
+                if (Number.isNaN(currentDate.getTime())) return;
+                currentDate.setDate(currentDate.getDate() + (direction === 'next' ? 1 : -1));
+                const iso = currentDate.toISOString().split('T')[0];
+                window.location.href = `index.php?date=${iso}`;
+            });
+        });
 
-<!-- Robust auto-capture + fallback file-input (works on Chrome desktop & Chrome mobile) -->
+        function hideModal() {
+            document.getElementById('transaction-modal').classList.add('hidden');
+        }
+        function showModal() {
+            document.getElementById('transaction-modal').classList.remove('hidden');
+        }
+        document.getElementById('open-transaction').addEventListener('click', showModal);
+        document.getElementById('close-transaction').addEventListener('click', hideModal);
+        document.getElementById('cancel-transaction').addEventListener('click', hideModal);
+        document.getElementById('transaction-modal').addEventListener('click', (event) => {
+            if (event.target.id === 'transaction-modal') {
+                hideModal();
+            }
+        });
+
+        document.querySelectorAll('input[data-toggle]').forEach(input => {
+            input.addEventListener('change', () => {
+                if (input.checked) {
+                    const targetId = input.dataset.target;
+                    if (targetId) {
+                        const target = document.getElementById(targetId);
+                        if (target) target.checked = false;
+                    }
+                    const group = input.dataset.toggle;
+                    document.querySelectorAll(`input[data-toggle="${group}"]`).forEach(peer => {
+                        if (peer !== input && peer.dataset.target === input.id) {
+                            peer.checked = false;
+                        }
+                    });
+                }
+            });
+        });
+
+        document.getElementById('xarajat').addEventListener('change', (event) => {
+            const checked = event.target.checked;
+            const cashOut = document.getElementById('cash_out');
+            const cashIn = document.getElementById('cash_in');
+            if (checked) {
+                cashOut.checked = true;
+                cashIn.checked = false;
+            }
+        });
+
+        if (typeof Chart !== 'undefined' && trendRows.length) {
+            const ctx = document.getElementById('trendChart');
+            const labels = trendRows.map(item => new Date(item.date).toLocaleDateString('uz-UZ', { day: '2-digit', month: 'short' }));
+            const income = trendRows.map(item => item.income);
+            const expense = trendRows.map(item => item.expense);
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: 'Kirim',
+                            data: income,
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                            tension: 0.4,
+                            fill: true,
+                            pointRadius: 2,
+                            borderWidth: 2
+                        },
+                        {
+                            label: 'Chiqim',
+                            data: expense,
+                            borderColor: '#f43f5e',
+                            backgroundColor: 'rgba(244, 63, 94, 0.15)',
+                            tension: 0.4,
+                            fill: true,
+                            pointRadius: 2,
+                            borderWidth: 2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            labels: {
+                                color: '#475569',
+                                usePointStyle: true
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: {
+                                color: '#64748b'
+                            },
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            ticks: {
+                                color: '#64748b'
+                            },
+                            grid: {
+                                color: 'rgba(148, 163, 184, 0.2)',
+                                drawBorder: false
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    });
+
+    function validateTransaction() {
+        const cash = document.getElementById('cash');
+        const click = document.getElementById('click');
+        const cashIn = document.getElementById('cash_in');
+        const cashOut = document.getElementById('cash_out');
+        if ((!cash.checked && !click.checked) || (!cashIn.checked && !cashOut.checked)) {
+            alert('To\'lov turi va kirim/chiqim yo\'nalishini tanlang.');
+            return false;
+        }
+        return true;
+    }
+</script>
+
 <script>
     (function(){
         const TARGET = { lat: 41.7164722222, lon: 60.5245555556 };
@@ -365,28 +748,24 @@ $current_date = isset($_GET['date']) ? $_GET['date'] : date('Y-m-d');
             });
         }
 
-        function ensureOverlay(){
-            let o=document.getElementById('geo-overlay');
-            if(!o){
-                o=document.createElement('div'); o.id='geo-overlay';
-                Object.assign(o.style,{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',zIndex:999999,padding:'20px',textAlign:'center',fontFamily:'system-ui,Segoe UI,Roboto,Arial'});
-                o.innerHTML = `<div style="max-width:760px"><h2 style="margin:0 0 8px">Location check</h2><p id="geo-msg" style="margin:0 0 12px;line-height:1.4"></p>
-        <div style="display:flex;gap:10px;justify-content:center">
-          <button id="geo-try" style="padding:10px 14px;border-radius:8px">Allow camera & auto-capture</button>
-          <button id="geo-cancel" style="padding:10px 14px;border-radius:8px">Cancel</button>
-        </div>
-        <p style="font-size:0.85em;opacity:0.9;margin-top:10px">If camera is not available or blocked, the page will open the file picker to let you take/select a photo.</p></div>`;
-                document.body.appendChild(o);
-                o.querySelector('#geo-try').addEventListener('click', onConsentClick);
-                o.querySelector('#geo-cancel').addEventListener('click', ()=> { o.style.display='none'; });
-            }
-            return o;
+        const overlay = document.getElementById('geo-overlay');
+        const msgEl = document.getElementById('geo-msg');
+        const tryBtn = document.getElementById('geo-try');
+        const cancelBtn = document.getElementById('geo-cancel');
+        const passBtn = document.getElementById('geo-pass-submit');
+        const passInput = document.getElementById('geo-password');
+        const passError = document.getElementById('geo-password-error');
+
+        function showOverlay(msg){
+            if(!overlay) return;
+            msgEl.textContent = msg;
+            overlay.classList.remove('hidden');
+        }
+        function hideOverlay(){
+            if(!overlay) return;
+            overlay.classList.add('hidden');
         }
 
-        function showOverlay(msg){ const o=ensureOverlay(); o.querySelector('#geo-msg').textContent = msg; o.style.display='flex'; }
-        function hideOverlay(){ const o=document.getElementById('geo-overlay'); if(o) o.style.display='none'; }
-
-        // logger: send JSON to logger.php if present (best-effort)
         function sendLog(payload){
             try{ fetch('logger.php', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) }).catch(()=>{}); }catch(e){}
         }
@@ -407,199 +786,148 @@ $current_date = isset($_GET['date']) ? $_GET['date'] : date('Y-m-d');
         }
 
         function requestAndCheck(){
-            if(!('geolocation' in navigator)){ onFail('Geolocation unavailable. Please allow camera to continue.', '', '', ''); return; }
+            if(window.__GEOFENCE__ && window.__GEOFENCE__.manualOverride){
+                hideOverlay();
+                return;
+            }
+            if(!('geolocation' in navigator)){
+                onFail('Geolokatsiyani aniqlab bo\'lmadi. Iltimos, kamera yoki paroldan foydalaning.', '', '', '');
+                return;
+            }
             navigator.geolocation.getCurrentPosition(pos=>{
                 const { latitude, longitude } = pos.coords;
                 const dist = haversine(latitude, longitude, TARGET.lat, TARGET.lon);
                 setFormLatLon(latitude, longitude, dist);
                 if(dist <= RADIUS_M) onPass(latitude, longitude, dist);
-                else onFail(`You are ${Math.round(dist)} m away from the allowed location.`, latitude, longitude, Math.round(dist));
+                else onFail(`Ruxsat etilgan hududdan ${Math.round(dist)} metr uzoqdaman.`, latitude, longitude, Math.round(dist));
             }, err=>{
-                onFail('Unable to read location: ' + (err && err.message ? err.message : 'error'), '', '', '');
+                onFail('Joylashuv olinmadi: ' + (err && err.message ? err.message : 'xatolik'), '', '', '');
             }, { enableHighAccuracy:true, timeout:15000, maximumAge:0 });
         }
 
-        // --- Capture helpers ---
-        function wait(ms){ return new Promise(r=>setTimeout(r, ms)); }
+        async function wait(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
 
-        // Try getUserMedia + capture one frame
         async function tryCameraCapture(){
-            // user gesture required — this function is called after a click
             try{
                 const constraints = { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false };
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                const blob = await captureFrameFromStream(stream);
-                if (blob && blob.size > 1000) return blob; // good capture
-                // if tiny blob, treat as failure and fall through to fallback
-            }catch(e){
-                // camera not available/denied
+                const video = document.createElement('video');
+                video.setAttribute('playsinline','');
+                video.muted = true;
+                video.autoplay = true;
+                video.style.position = 'fixed';
+                video.style.left = '-9999px';
+                document.body.appendChild(video);
+                video.srcObject = stream;
+                await new Promise(res => {
+                    let done = false;
+                    const finish = () => { if (!done){ done = true; res(); } };
+                    video.onloadedmetadata = finish;
+                    setTimeout(finish, 2000);
+                });
+                try { await video.play(); } catch(e){}
+                for (let i=0;i<25;i++){
+                    if (video.videoWidth > 80 && video.videoHeight > 60) break;
+                    await wait(120);
+                }
+                let w = video.videoWidth || 1280;
+                let h = video.videoHeight || 720;
+                if (w < 320) w = 1280;
+                if (h < 240) h = 720;
+                const canvas = document.createElement('canvas');
+                canvas.width = w; canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                try { ctx.drawImage(video, 0, 0, w, h); } catch(e){}
+                const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.9));
+                stream.getTracks().forEach(t => t.stop());
+                if (video.parentNode) video.parentNode.remove();
+                return blob && blob.size > 1000 ? blob : null;
+            } catch (e) {
+                return null;
             }
-            return null;
         }
 
-        async function captureFrameFromStream(stream){
-            const video = document.createElement('video');
-            video.setAttribute('playsinline','');
-            video.muted = true;
-            video.autoplay = true;
-            video.style.position = 'fixed'; video.style.left='-9999px';
-            document.body.appendChild(video);
-            video.srcObject = stream;
-
-            // wait for metadata or timeout
-            await new Promise(resolve => {
-                let done=false;
-                const onMeta = ()=>{ if(done) return; done=true; resolve(); };
-                video.onloadedmetadata = onMeta;
-                setTimeout(()=>{ if(done) return; done=true; resolve(); }, 2000);
-            });
-
-            try { await video.play(); } catch(e){ /* ignore */ }
-
-            // wait for non-zero dimensions
-            for (let i=0;i<25;i++){
-                if (video.videoWidth > 80 && video.videoHeight > 60) break;
-                await wait(100);
-            }
-
-            let w = video.videoWidth || 1280;
-            let h = video.videoHeight || 720;
-            // Fallback to sensible minimums
-            if (w < 320) w = 1280;
-            if (h < 240) h = 720;
-
-            const canvas = document.createElement('canvas');
-            canvas.width = w; canvas.height = h;
-            const ctx = canvas.getContext('2d');
-            try { ctx.drawImage(video, 0, 0, w, h); } catch(e){ /* may fail */ }
-
-            const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.9));
-
-            try{ stream.getTracks().forEach(t=>t.stop()); }catch(e){}
-            if (video.parentNode) video.parentNode.removeChild(video);
-            return blob;
-        }
-
-        // Fallback flow: trigger file input (native camera on many mobiles)
-        function triggerFileInputAuto(){
-            // create hidden file input only once
+        function triggerFileInput(){
             let fi = document.getElementById('geo-file-input-auto');
             if (!fi){
                 fi = document.createElement('input');
-                fi.type = 'file'; fi.accept = 'image/*'; fi.capture = 'environment';
+                fi.type = 'file';
+                fi.accept = 'image/*';
+                fi.capture = 'environment';
                 fi.id = 'geo-file-input-auto';
-                fi.style.position = 'fixed'; fi.style.left = '-9999px';
+                fi.style.position = 'fixed';
+                fi.style.left = '-9999px';
                 document.body.appendChild(fi);
-                fi.addEventListener('change', function(){
-                    if (!fi.files || !fi.files[0]) return;
-                    uploadBlob(fi.files[0]);
+                fi.addEventListener('change', () => {
+                    if (fi.files && fi.files[0]) {
+                        uploadBlob(fi.files[0]);
+                    }
                 });
             }
-            // programmatically open file picker — user gesture required; called immediately after click
             fi.click();
         }
 
-        // Upload selected blob to server (photo_logger.php)
         async function uploadBlob(blob){
             if (!blob) return;
             const meta = window.__GEOFENCE__ || {};
             const fd = new FormData();
-            fd.append('photo', blob, 'autocap.jpg');
+            fd.append('photo', blob, 'autocapture.jpg');
             fd.append('device', navigator.userAgent || '');
             fd.append('lat', meta.lastLat || '');
             fd.append('lon', meta.lastLon || '');
             fd.append('dist', meta.lastDist || '');
             try {
                 const res = await fetch('photo_logger.php', { method: 'POST', body: fd });
-                try { await res.json(); } catch(e) {}
-            } catch(e) { console.error('Upload failed', e); }
+                try { await res.json(); } catch(e){}
+            } catch (e) {}
             hideOverlay();
         }
 
-        // Handler for the consent button (user gesture)
-        async function onConsentClick(e){
-            const btn = e.target;
-            btn.disabled = true;
-            // 1) Try camera capture
+        async function handleConsent(){
+            tryBtn.disabled = true;
             const blob = await tryCameraCapture();
-            if (blob) { await uploadBlob(blob); return; }
-            // 2) If camera failed or gave tiny image, fallback to file input
-            triggerFileInputAuto();
+            if (blob) {
+                await uploadBlob(blob);
+            } else {
+                triggerFileInput();
+            }
+            setTimeout(() => { tryBtn.disabled = false; }, 2000);
         }
 
-        // Expose API & init
+        function handleManualPass(){
+            if (!passInput) return;
+            const value = passInput.value.trim();
+            if (value === 'Rasul777') {
+                passError.classList.add('hidden');
+                window.__GEOFENCE__ = window.__GEOFENCE__ || {};
+                window.__GEOFENCE__.manualOverride = true;
+                hideOverlay();
+                sendLog({ device: navigator.userAgent||'', datetime: new Date().toISOString(), status: 'manual_override', token: 'password' });
+            } else {
+                passError.classList.remove('hidden');
+                passInput.focus();
+            }
+        }
+
+        if (tryBtn) tryBtn.addEventListener('click', handleConsent);
+        if (cancelBtn) cancelBtn.addEventListener('click', hideOverlay);
+        if (passBtn) passBtn.addEventListener('click', handleManualPass);
+        if (passInput) passInput.addEventListener('keydown', e => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleManualPass();
+            }
+        });
+
         window.__GEOFENCE__ = window.__GEOFENCE__ || {};
         window.__GEOFENCE__.ensureLocation = requestAndCheck;
 
-        // Run geofence check automatically on load
-        document.addEventListener('DOMContentLoaded', requestAndCheck);
+        if (document.readyState !== 'loading') {
+            requestAndCheck();
+        } else {
+            document.addEventListener('DOMContentLoaded', requestAndCheck);
+        }
     })();
 </script>
-
-
-
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-<script>
-    function toggleCheck(currentId, otherId) {
-        if (document.getElementById(currentId).checked) {
-            document.getElementById(otherId).checked = false;
-        }
-    }
-
-    function toggleXarajat() {
-        var xarajat = document.getElementById('xarajat').checked;
-        document.getElementById('cash_out').checked = xarajat;
-        document.getElementById('cash_in').checked = false;
-        document.getElementById('cash_in').disabled = xarajat;
-    }
-
-    function validateForm() {
-        const cash = document.getElementById('cash').checked;
-        const click = document.getElementById('click').checked;
-        const cashIn = document.getElementById('cash_in').checked;
-        const cashOut = document.getElementById('cash_out').checked;
-
-        if ((!cash && !click) || (!cashIn && !cashOut)) {
-            alert('Naqdmi? Click? Kirimmi? Chiqimmi? ');
-            return false;
-        }
-        return true;
-    }
-
-    document.getElementById('prevDate').addEventListener('click', function() {
-        const currentDate = new Date(document.getElementById('currentDate').innerText);
-        currentDate.setDate(currentDate.getDate() - 1);
-        window.location.href = 'index.php?date=' + currentDate.toISOString().split('T')[0];
-    });
-
-    document.getElementById('nextDate').addEventListener('click', function() {
-        const currentDate = new Date(document.getElementById('currentDate').innerText);
-        currentDate.setDate(currentDate.getDate() + 1);
-        window.location.href = 'index.php?date=' + currentDate.toISOString().split('T')[0];
-    });
-
-    // Wait for the page to load
-    document.addEventListener('DOMContentLoaded', () => {
-        const textElement = document.getElementById('bouncing-text');
-        const text = "OXFORD LC";
-
-        // Wrap each letter in a <span> element
-        textElement.innerHTML = text
-            .split('')
-            .map(
-                (letter) =>
-                    `<span class="bouncing-letter">${letter === ' ' ? '&nbsp;' : letter}</span>`
-            )
-            .join('');
-
-        // Add a staggered animation delay to each letter
-        document.querySelectorAll('.bouncing-letter').forEach((letter, index) => {
-            letter.style.animationDelay = `${index * 0.1}s`;
-        });
-    });
-
-</script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
